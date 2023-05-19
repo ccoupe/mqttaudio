@@ -1,0 +1,8 @@
+{
+  "mqtt_server_ip": "stoic.local",
+  "mqtt_port": 1883,
+  "mqtt_client_name": "test_bridge",
+  "homie_device": "test_bear",
+  "bridge_ip": "192.168.1.42",
+  "bridge_port": 8281
+}
