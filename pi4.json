@@ -14,9 +14,11 @@
   },
   "microphone": "alsa_input.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.mono-fallback",
   "microphone_volume": 0.73,
-  "speaker": "bluez_sink.C2_08_9A_CB_33_0C.a2dp_sink",
+  "speaker": "bluez_output.C2_08_9A_CB_33_0C.1",
   "speaker_volume": 0.69,
   "mic_pub_type": "login",
   "mic_pub_topic": "homie/test_trumpy_bear/screen/control/set",
-  "chat_url": "http://bronco.local:5004/"
+  "ollama_url": "http://bronco.local:11434/api/chat",
+  "ollama_pull": "http://bronco.local:11434/api/pull",
+  "ollama_model": "llama2-uncensored:7b"
 }

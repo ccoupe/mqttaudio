@@ -31,7 +31,9 @@ class Settings:
     self.bridge_ip = conf.get('bridge_ip', '192.168.1.2')
     self.bridge_port = conf.get('bridge_port', 8281)
     self.engine_nm = conf.get("engine", None)
-    self.chat_url = conf.get("chat_url", "http://localhost:5004/")
+    self.ollama_url = conf.get("ollama_url", "http://bronco.local:11434/api/chat")
+    self.ollama_pull = conf.get("ollama_pull", "http://bronco.local:11434/api/pull")
+    self.ollama_model = conf.get("ollama_model", "llama2-uncensored:7b")
     engine_dt = conf.get(self.engine_nm, {})
     self.tts_url = engine_dt.get('tts_url', None)
     
@@ -40,6 +42,8 @@ class Settings:
     # its required that the bridge runs on the mycroft device (if mycroft)
     # because it likes to manage pulseaudio (and alsa) too.
     self.mycroft_uri = 'ws://' + self.bridge_ip + ':8181/core'
+    self.stt_host = conf.get('stt_host', 'bronco.local')
+    self.stt_port = conf.get('stt_port', 5003)
 
 
   def print(self):

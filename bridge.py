@@ -19,6 +19,7 @@ import socket
 import os
 from lib.Settings import Settings
 from lib.Audio import AudioDev
+from lib.Chatbot import Chatbot
 from subprocess import Popen
 import urllib.request
 #from lib.Constants import State, Event
@@ -60,10 +61,11 @@ isPi = False
 muted = False
 five_min_thread = None
 machine_state = None
+chatbot = None
 
 def mqtt_conn_init(st):
   global hmqtt
-  hmqtt = mqtt.Client(st.mqtt_client_name, False)
+  hmqtt = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, st.mqtt_client_name, False)
   hmqtt.connect(st.mqtt_server_ip, st.mqtt_port)
   toplevel = 'homie/'+st.homie_device
   hmqtt.publish(toplevel, None, qos=1,retain=True)
@@ -164,7 +166,8 @@ def mqtt_message(client, userdata, message):
       settings.pulse.source_mute(settings.microphone_index, not muted)
       muted = not muted
       mic_icon(muted)
-      
+    elif payload == 'test_tts':
+      glados_test_tts()
     elif payload == '?':
       if settings.engine_nm == 'mycroft':
         mycroft_mute_status()
@@ -268,8 +271,48 @@ def glados_speak(message):
 def playFile(filename):
   global audiodev
   call(["aplay", "-q", filename])	
-  
 
+def glados_test_tts():
+  global applog
+  st_dt = datetime.now()
+  msg = "Hello there Big boy! Are you happy to see me or is that a roll of quarters in your pocket?"  
+  test_TTSSample(msg)
+  end_dt = datetime.now()
+  applog.info(f'Begin mesg 1: {st_dt} Finished: {end_dt}')
+  st_dt = end_dt
+  test_TTSSample(msg)
+  end_dt = datetime.now()
+  applog.info(f'Begin mesg 2: {st_dt} Finished: {end_dt}')
+  # Cause a failure - somewhere down the line their should be a complaint
+  applog.info("Cause a failure")
+  test_TTSSample("")
+  applog.info("TSS failure above? Please?")
+  
+#
+# GLados tts can fail - POST headers have spurious \n or \r
+#   Curl is failing file upload? 
+def test_TTSSample(line):
+  global settings, applog, hmqtt
+  fi = '/tmp/GLaDOS-tts-txt.in'
+  fo = '/tmp/GLaDOS-tts-temp-output.wav'
+  if len(line) < 60:
+    text = urllib.parse.quote(cleanTTSLine(line))
+    TTSCommand = 'curl -L --retry 5 --get --fail -o /tmp/GLaDOS-tts-temp-output.wav '+settings.tts_url+text
+  else:
+    with open(fi, "w") as f:
+      f.write(line)
+    TTSCommand = f'curl --rety 5  -F file=@{fi} -o {fo} ' + settings.tts_url
+ 
+  TTSResponse = os.system(TTSCommand)
+  
+  if(TTSResponse != 0):
+    applog.debug(f'Failed: TTS fetch phrase {line}')
+    return False
+  if (os.path.getsize(fo) < 1024) :
+    applog.info("Audio file too short")
+  return True
+  
+  
 # Turns units etc into speakable text
 def cleanTTSLine(line):
   #line = line.replace("sauna", "incinerator")
@@ -281,7 +324,7 @@ def cleanTTSLine(line):
   
   return line
 
-# Get GLaDOS TTS Sample
+# Get GLaDOS TTS 
 def fetchTTSSample(line):
   global settings, applog, hmqtt
   fi = '/tmp/GLaDOS-tts-txt.in'
@@ -292,7 +335,7 @@ def fetchTTSSample(line):
   else:
     with open(fi, "w") as f:
       f.write(line)
-    TTSCommand = f'curl -F file=@{fi} -o {fo} ' + settings.tts_url
+    TTSCommand = f'curl --retry 5 -F file=@{fi} -o {fo} ' + settings.tts_url
  
   TTSResponse = os.system(TTSCommand)
   
@@ -308,7 +351,7 @@ def fetchTTSSample(line):
   
 
 def glados_answer(internal=False):
-  global applog, microphone,recognizer
+  global applog, microphone,recognizer, settings
   # get a .wav from the microphone
   # send that to STT (whisper)
   # return the response. 
@@ -323,7 +366,7 @@ def glados_answer(internal=False):
     with open(fi, "wb") as f:
       f.write(audio.get_wav_data())
     applog.info("calling whisper")
-    cmd = f'curl -F file=@{fi} -o {fo} bronco.local:5003'
+    cmd = f'curl -F file=@{fi} -o {fo} {settings.stt_host}:{settings.stt_port}'
     os.system(cmd)
     dt = {}
     with open(fo,"r") as f:
@@ -427,6 +470,7 @@ eventQ = Queue(5)
 
 #result = requests.post('http://localhost:5004/', json={"prompt": msg})
 #
+'''
 def call_chatbot(msg):
   global settings, applog
   result = requests.post(settings.chat_url, json={"prompt": msg})
@@ -436,7 +480,58 @@ def call_chatbot(msg):
     run_machine((Event.reply, dt['reply']))
   else:
     applog.info('Failed POST to chatbot')
+'''
+# This was going to return a tuple of status and the message dict. I don't like
+# execption for errors but then again it's some work and I have things to do.
+# TODO Fix that
+def call_ollama(settings, messages):
+    r = requests.post(
+        settings.ollama_url,
+        json={"model": settings.ollama_model, "messages": messages, "stream": True},
+    )
+    r.raise_for_status()
+    output = ""
 
+    for line in r.iter_lines():
+        body = json.loads(line)
+        if "error" in body:
+            #return False, body["error"]
+            raise Exception(body["error"])
+        if body.get("done") is False:
+            message = body.get("message", "")
+            content = message.get("content", "")
+            output += content
+            # the response streams one token at a time, print that as we receive it
+            # TODO - advance the GUI indicator that something is happening
+            print('+', end="", flush=True)
+
+        if body.get("done", False):
+            message["content"] = output
+            return True, message
+            
+def call_chatbot(msg):
+      global settings, applog, chatbot
+      # TODO set_ollama_model needs to be triggered by Login From Panel mqtt message.
+      # 
+      chatbot.messages.append({"role": "user", "content": msg})
+      ok, message = call_ollama(settings, chatbot.messages)
+      chatbot.messages.append(message)
+      print("\n\n")
+      if ok:
+        content = message['content']
+        applog.info(f'Chat Result: {content}')
+        run_machine((Event.reply, content))
+      else:
+        applog.info('Failed POST to chatbot', message)
+
+
+def set_ollama_model(model=None):
+  global chatbot, settings, applog
+  chatbot = Chatbot(applog)
+  if model is not None:
+    chatbot.init_llm(settings.ollama_pull, model)
+    applog.info(f"Loaded {model} model")
+  chatbot.ollama_url = settings.ollama_url
     
 def run_machine(evtTuple=None):
   global machine_state, applog, settings, hmqtt, eventQ
@@ -555,6 +650,41 @@ def wss_server_init(st):
   applog.info(wsadr)
   wss_server = websockets.serve(wss_reply, IPAddr, 5125)
 
+# TODO Don't use pulsectl module for pipeware - even if it works.
+# Better to parse wpctl status output eh?
+def pipewire_setup(settings):
+  pulse = pulsectl.Pulse('mqttmycroft')
+  for src in pulse.source_list():
+    print('PWire Setup Source:', src)
+    if src.name == settings.microphone:
+      settings.microphone_index = src.index
+      settings.source = src
+      pulse.default_set(src)
+      applog.info(f'Microphone index = {settings.microphone_index}')
+  for sink in pulse.sink_list():
+    #applog.info(f'{sink.name} =? {settings.speaker}')
+    print('PWire Setup Sink:', sink)
+    if sink.name == settings.speaker:
+      settings.speaker_index = sink.index
+      settings.sink = sink
+      pulse.default_set(sink)
+      applog.info(f'Speaker index = {settings.speaker_index}')
+        
+  if settings.microphone_index is None:
+    applog.error('Missing or bad Microphone setting')
+    exit()
+  else:
+    pulse.volume_set_all_chans(settings.source, settings.microphone_volume)
+    
+  if settings.speaker_index is None:
+    applog.error('Missing or bad Speaker setting')
+    exit()
+  else:
+    pulse.volume_set_all_chans(settings.sink, settings.speaker_volume)
+    
+  # save the pulse object so we can call it later.
+  settings.pulse = pulse
+
 def pulse_setup(settings):
   pulse = pulsectl.Pulse('mqttmycroft')
   for src in pulse.source_list():
@@ -585,7 +715,6 @@ def pulse_setup(settings):
     
   # save the pulse object so we can call it later.
   settings.pulse = pulse
-
 
 # Hubitat 'devices' 
 def mp3_player(fp):
@@ -754,7 +883,10 @@ def main():
   mqtt_conn_init(settings)
   # setup pulseaudio and device volumes.
   audiodev = AudioDev()
-  pulse_setup(settings)
+  if audiodev.isPipeWire:
+    pipewire_setup(settings)
+  else:
+    pulse_setup(settings)
   # The hubitat devices (player, chime, siren) can have separate
   # volumes and be restored to their defaults. The computer OS 
   # and libraries hold the real values so we read them. The OS
@@ -775,8 +907,15 @@ def main():
   settings.tss_vol = settings.speaker_volume
   
   recognizer = speech_recog.Recognizer()
-  microphone = speech_recog.Microphone(device_index=settings.microphone_index)
+  # TODO Hack in the alsa microphone number
+  settings.alsa_mic = 4
+  applog.info(f"Mic index: {settings.microphone_index}")
+  #microphone = speech_recog.Microphone(device_index=settings.microphone_index)
+  microphone = speech_recog.Microphone(device_index=settings.alsa_mic)
 
+  # create the ollama pbjects and pull the model 
+  set_ollama_model(settings.ollama_model)
+  
   wss_server_init(settings)
   # it doesn't do anything, no need to call it.
   #five_min_timer()   

@@ -9,22 +9,27 @@
 # Alsa here means raspberry w/o pulseaudo. It might work on other Alsa
 #   systems w/o pulseaudo. I wouldn't depend on it though.
 #   Alsa provides nn% so we use that. alsamixer is confusing about this.
-# 
+# Pipewire - sigh. The code assumes that pactl works - ie pulseaudio 
+#   bridge to Pipewire is setup and working. Like on a Raspberry pi running
+#   Bookworm. I should do something with wpctl - I can get info easier and it
+#   would not depend on pactl.
+#   80 means 80% or as pipewire perfers 0.80. We scale to the integer number - yes
+#   in can go higher, up to 150. 
 
 import sys
 import os
 from os import path
 import re
+import json
 
 class AudioDev:
 
   def __init__(self):
-    self.isPulse = False
-    self.isAlsa = False
     self.isLinux = sys.platform.startswith("linux")
     self.isDarwin = sys.platform.startswith("darwin")
     self.isAlsa = False
     self.isPulse = False
+    self.isPipeWire = False
     self.sink_dev = None
     self.sink_idx = None
     self.sink_volume = None # 0..100
@@ -34,7 +39,12 @@ class AudioDev:
     self.play_wav_cmd = ''
     if self.isLinux:
       #print("Linux")
-      if self.findPulse():
+      if self.findPipeWire():
+        self.isPipeWire = True
+        self.pipewire_config()
+        self.play_mp3_cmd = 'mpg123 -q --no-control'
+        self.play_wav_cmd = 'pw_play'
+      elif self.findPulse():
         self.isPulse = True
         self.pulse_config()
         self.play_mp3_cmd = 'mpg123 -q --no-control'
@@ -61,6 +71,83 @@ class AudioDev:
     self.sink_dev = 'system'
     self.sink_idx = 0
 
+  # --------------- PipeWire --------------------------
+  
+  def findPipeWire(self):
+    if path.exists('/usr/bin/pw-cli'):
+      return True
+    return False
+    
+  def pipewire_withpulse_config(self):
+    lines = os.popen('pw-dump -N', mode='r').readlines()
+    bigstr = ''
+    for ln in lines:
+      bigstr = bigstr + ln
+    dt = json.loads(bigstr)
+    for ent in dt:
+      if ent['id'] == 35:
+        mlist = ent['metadata']
+        for li in mlist:
+          # find 'key': 'default.configured.audio.sink'
+          if li['key'] == 'default.configured.audio.sink':
+            val = li['value']
+            self.sink_dev = val['name']
+            #print("Our Sink:", self.sink_dev)
+            self.sink_volume = self.pulse_getvol()
+            #print(f"Our Sink is {self.sink_dev} volume: {self.sink_volume}")
+
+  def pipewire_config(self):
+    in_audio = False
+    in_video = False
+    in_settings = False
+    in_audio_sinks = False
+    lines = os.popen('wpctl status', mode='r').readlines()
+    for ln in lines:
+      ln = ln.strip()
+      if ln == 'Audio':
+        in_audio = True
+        in_video = False
+        in_settings = False
+        continue
+      elif ln == 'Video':
+        in_audio = False
+        in_video = True
+        in_settings = False
+        continue
+      elif ln == 'Settings':
+        in_audio = False
+        in_video = False
+        in_settings = True
+        continue
+        
+      if in_audio:
+        continue
+      elif in_audio_sinks:
+        print('Have',len(ln), ln)
+        in_audio_sinks = False
+        continue
+      elif in_video:
+        continue
+      elif in_settings:
+        flds = ln.split(' ')
+        if flds[1] == 'Audio/Sink':
+          self.sink_dev = flds[-1]
+        elif flds[1] == 'Audio/Source':
+          self.source_dev = flds[-1]
+
+    self.sink_volume = self.pipewire_getvol()
+    
+  def pipewire_getvol(self):
+    lines = os.popen('wpctl get-volume @DEFAULT_AUDIO_SINK@', mode='r').readlines()
+    for ln in lines:
+      ln = ln.strip()
+      if len(ln) > 8:
+        flds = ln.split(' ')
+        vol = float(flds[1]) * 100
+        print('@VOLUME@', vol)
+        return vol
+            
+  # ------------ PulseAudio ---------
 
   def findPulse(self):
     if path.exists('/usr/bin/pulseaudio'):
@@ -160,6 +247,8 @@ class AudioDev:
       val = os.popen("osascript -e 'output volume of (get volume settings)'", mode='r').readlines()
       for v in val:
         self.sink_volume = int(v)
+    elif self.isPipeWire: 
+       self.sink_volume = self.pipewire_getvol()     
     elif self.isPulse:
       self.sink_volume = self.pulse_getvol()
     elif self.isAlsa:
@@ -169,11 +258,14 @@ class AudioDev:
     return self.sink_volume
        
   def set_volume(self, amt):
-    if amt < 0 or amt > 100:
+    if amt < 0 or amt > 150:
       raise ValueError
     self.sink_volume = amt
     if self.isDarwin:
       os.system(f'osascript -e "set volume output volume {self.sink_volume}"')
+    elif self.isPipeWire:
+      tv = self.sink_volume
+      os.system(f'wpctl set-volume @DEFAULT_AUDIO_SINK@ {tv / 100.0}')
     elif self.isPulse:
       tv = self.sink_volume
       os.system(f'pactl set-sink-volume {self.sink_dev} {tv}%')
@@ -189,7 +281,8 @@ if __name__ == '__main__':
   print('output to:', ad.sink_dev)
   pv = ad.get_volume()
   print('cur vol:', pv)
-  ad.set_volume(60)
+  #ad.set_volume(60)
+  ad.set_volume(120)
   print('new vol:', ad.sink_volume, ad.get_volume())
   ad.set_volume(pv)
   print('rst vol:', ad.sink_volume, ad.get_volume())
