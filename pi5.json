@@ -1,9 +1,9 @@
 {
   "mqtt_server_ip": "stoic.local",
   "mqtt_port": 1883,
-  "mqtt_client_name": "test_bridge",
-  "homie_device": "test_trumpy_bear",
-  "bridge_ip": "pi4.local",
+  "mqtt_client_name": "pi5_bridge",
+  "homie_device": "pi5_bear",
+  "bridge_ip": "pi5.local",
   "bridge_port": 8281,
   "engine": "glados",
   "glados": {
@@ -17,8 +17,10 @@
   "speaker": "bluez_output.C2_08_9A_CB_33_0C.1",
   "speaker_volume": 0.69,
   "mic_pub_type": "login",
-  "mic_pub_topic": "homie/test_trumpy_bear/screen/control/set",
-  "ollama_url": "http://bronco.local:11434/api/chat",
-  "ollama_pull": "http://bronco.local:11434/api/pull",
-  "ollama_model": "llama2-uncensored:7b"
+  "mic_pub_topic": "homie/pi5_bear/screen/control/set",
+  "ollama_model": "llama2-uncensored:7b",
+  "ollama_hosts": ["bronco.local", "bigboy.local"],
+  "ollama_port": 11434,
+  "stt_host": "bronco.local",
+  "stt_port": 5003
 }

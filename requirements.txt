@@ -1,0 +1,13 @@
+opencv-contrib-python
+imutil
+zmq
+paho-mqtt
+websocket-client
+python-vlc
+websockets
+pulsectl
+SpeechRecognition
+pipewire_python
+pyaudio
+ollama
+
