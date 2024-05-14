@@ -1,14 +1,16 @@
 # Class for ollama chatbot connections and context management
 # for me, Ollama is likely to be running under docker. 
 #
-# Also include some wave file functions. It's cleaner here than
-# in the mainline
 
 import requests
 import json
 from ollama import Client
-import pyaudio  
+import globals
 import wave
+import time
+import sys
+import os
+import pyaudio
 
 class Chatbot:
   def __init__(self, applog, hosts, port):
@@ -62,12 +64,21 @@ class Chatbot:
       mdlnm.append(mdl['name'])
     return mdlnm
     
+  '''
   def call_ollama(self, messages):
     response = self.client.chat(model=self.model_name, messages=messages)
     self.log.info(f'Back from ollama: {response}')
     return True, response['message']
     
   '''
+  # The streaming option using REST api (vs the ollama python api)
+  # anecdotally, this seems faster. There is no logical reason for that. 
+  # it appears that one (1) \n is a token. 2 are used between paragraphs
+  # one to end the last line of the paragraph and one to insert a blank line
+  # in the output.  
+  # TODO use paragraph mark to start the tts for that paragraph and enqueue
+  #   the follow on paragraphs for tts. It would be fun getting this to work.
+  #
   def call_ollama(self, messages):
     r = requests.post(
         self.chat_url,
@@ -86,10 +97,12 @@ class Chatbot:
             output += content
             # the response streams one token at a time, print that as we receive it
             # TODO - advance the GUI indicator that something is happening
-            print('+', end="", flush=True)
+            if len(content) <= 1 and content=='\n': 
+              print('-', end="", flush=True)
+            else:
+              print('+', end="", flush=True)
 
         if body.get("done", False):
             message["content"] = output
             return True, message
-  '''
-  
+  #'''

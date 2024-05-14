@@ -20,53 +20,30 @@ import os
 from lib.Settings import Settings
 from lib.Audio import AudioDev
 from lib.Chatbot import Chatbot
-import chatio
+import speechio
+import globals
 from subprocess import Popen
 import urllib.request
-#from lib.Constants import State, Event
+from lib.Constants import State, Event
 import logging
 import logging.handlers
 import asyncio
 import websockets
 import websocket
 import pulsectl
-# for calling GLaDOS TTS
-from subprocess import call
-import urllib.parse
-import re
+
+#from subprocess import call
+#import urllib.parse
+#import re
 import speech_recognition as speech_recog
 import random
 from queue import Queue
-import enum 
-from enum import IntEnum
 import requests
-
-class State(enum.Enum): 
-  idle = 0
-  listening = 1
-  chatting = 2
-  
-class Event(enum.Enum):
-  beginLoop = 0
-  quit = 1
-  stop = 2
-  reply = 3
-  sttDone = 4
-  switchModel = 5
-  
 import globals
-'''
-# Globals
-settings = None
-hmqtt = None
-applog = None
-isPi = False
-muted = False
-five_min_thread = None
+
+# Global for this file/module
 machine_state = None
-chatbot = None
-cancel_audio_out: bool = False
-'''
+five_min_thread = None
 
 def mqtt_conn_init(st):
   global hmqtt
@@ -122,15 +99,6 @@ def mqtt_conn_init(st):
       
   hmqtt.on_message = mqtt_message
   hmqtt.loop_start()
-  
-# Send to Mycroft message bus
-# TODO: check return codes
-'''
-def mycroft_send(msg):
-  ws = websocket.create_connection(settings.mycroft_uri)
-  ws.send(msg)
-  ws.close()
-'''
 
 def mqtt_message(client, userdata, message):
   global settings, applog, muted
@@ -146,13 +114,13 @@ def mqtt_message(client, userdata, message):
       # mycroft_speak(payload)
       pass
     else:
-      glados_speak(payload)
+      speechio.speak(payload)
   elif topic == settings.hsub_ask and len(str(payload)) > 0:
     if settings.engine_nm == 'mycroft':
       # mycroft_skill(payload)
       pass
     else:
-      glados_ask(payload)
+      speechio.ask(payload)
   elif topic == settings.hsub_ctl and len(str(payload)) > 0:
     if payload[0] == '{':
       # assume it is json
@@ -165,7 +133,7 @@ def mqtt_message(client, userdata, message):
       muted = False
       mic_icon(True)
       #time.sleep(1)
-    elif payload == 'off' and muted == False:
+    elif payload == 'off' and globals.muted == False:
       # Use pulseaudio to mute mic and speaker
       applog.info('Pulseaudo muted')
       settings.pulse.source_mute(settings.microphone_index, 1)
@@ -178,7 +146,7 @@ def mqtt_message(client, userdata, message):
       muted = not muted
       mic_icon(muted)
     elif payload == 'test_tts':
-      glados_test_tts()
+      speechio.test_tts()
     elif payload == '?':
       if settings.engine_nm == 'mycroft':
         #mycroft_mute_status()
@@ -269,227 +237,6 @@ def mic_show_state(msg):
   dt['cmd'] = msg
   hmqtt.publish(settings.mic_pub_topic, json.dumps(dt), qos=1)
 
-    
-'''
-def mycroft_speak(message):
-  global settings, applog,  muted
-  if muted:
-    # unmute
-    settings.pulse.source_mute(settings.microphone_index, 0)
-    settings.pulse.sink_mute(settings.speaker_index, 0)
-    mic_icon(True)
-  # TODO: set volume first?
-  mycroft_type = 'recognizer_loop:utterance'
-  payload = json.dumps({
-    "type": mycroft_type,
-    "context": "",
-    "data": {
-        "utterances": ["say {}".format(message)]
-    }
-  })
-  applog.info("speaking %s" % payload)
-  mycroft_send(payload)  
-  # enough time to get in the playing queue otherwise they go LIFO
-  time.sleep(1) 
-  return
-'''
-  
-def glados_speak(message):
-  global settings, applog,  muted
-  if muted:
-    # unmute
-    settings.pulse.source_mute(settings.microphone_index, 0)
-    settings.pulse.sink_mute(settings.speaker_index, 0)
-    mic_icon(True)
-  # TODO: set volume first?
-  fetchTTSSample(message)
-  time.sleep(1) 
-  return
- 
-'''
-# Glados stuff Borrowed from nerdaxic: 
-# Note 'aplay' is synchronous - we wait in playFile until
-# the sound is finished playing. It is highly likely we
-# depend on that behavior instead of using state machines, callbacks
-# and other joyful things.
-
-def playFile(filename):
-  global audiodev, applog, cancel_audio_out
-  # call(["aplay", "-q", filename])	
-  import pyaudio  
-  import wave
-  chunk: int = 1024
-  applog.info(f"Playing {filename}")
-  # There is a race condition possible with cancel_audio_out
-  # I think.
-  cancel_audio_out = False
-  with wave.open(filename, 'rb') as wf:
-    
-      def callback(in_data, frame_count, time_info, status):
-        global cancel_audio_out
-        if cancel_audio_out:
-          cancel_audio_out = False
-          data = [] # a len of 0 means we are at the end
-        else:
-          data = wf.readframes(frame_count)
-        # If len(data) is less than requested frame_count, PyAudio automatically
-        # assumes the stream is finished, and the stream stops.
-        return (data, pyaudio.paContinue)
-
-      # Instantiate PyAudio and initialize PortAudio system resources (1)
-      p = pyaudio.PyAudio()
-  
-      # Open stream (2)
-      stream = p.open(format=p.get_format_from_width(wf.getsampwidth()),
-                      channels=wf.getnchannels(),
-                      rate=wf.getframerate(),
-                      output=True,
-                      stream_callback=callback)
-  
-      # Wait for stream to finish (4)
-      while stream.is_active():
-          time.sleep(0.1)
-      
-      # Close the stream (5)
-      stream.close()
-      
-      # Release PortAudio system resources (6)
-      p.terminate()
-'''    
-
-def glados_test_tts():
-  global applog
-  st_dt = datetime.now()
-  msg = "Hello there Big boy! Are you happy to see me or is that a roll of quarters in your pocket?"  
-  test_TTSSample(msg)
-  end_dt = datetime.now()
-  applog.info(f'Begin mesg 1: {st_dt} Finished: {end_dt}')
-  st_dt = end_dt
-  test_TTSSample(msg)
-  end_dt = datetime.now()
-  applog.info(f'Begin mesg 2: {st_dt} Finished: {end_dt}')
-  # Cause a failure - somewhere down the line their should be a complaint
-  applog.info("Cause a failure")
-  test_TTSSample("")
-  applog.info("TSS failure above? Please?")
-  
-#
-# GLados tts can fail - POST headers have spurious \n or \r
-#   Curl is failing file upload? 
-def test_TTSSample(line):
-  global settings, applog, hmqtt
-  fi = '/tmp/GLaDOS-tts-txt.in'
-  fo = '/tmp/GLaDOS-tts-temp-output.wav'
-  if len(line) < 60:
-    text = urllib.parse.quote(cleanTTSLine(line))
-    TTSCommand = 'curl -L --retry 5 --get --fail -o /tmp/GLaDOS-tts-temp-output.wav '+settings.tts_url+text
-  else:
-    with open(fi, "w") as f:
-      f.write(line)
-    TTSCommand = f'curl --rety 5  -F file=@{fi} -o {fo} ' + settings.tts_url
- 
-  TTSResponse = os.system(TTSCommand)
-  
-  if(TTSResponse != 0):
-    applog.debug(f'Failed: TTS fetch phrase {line}')
-    return False
-  if (os.path.getsize(fo) < 1024) :
-    applog.info("Audio file too short")
-  return True
-  
-  
-# Turns units etc into speakable text
-def cleanTTSLine(line):
-  #line = line.replace("sauna", "incinerator")
-  line = line.replace("'", "")
-  line = line.lower()
-  
-  if re.search("-\d", line):
-    line = line.replace("-", "negative ")
-  
-  return line
-
-# Get GLaDOS TTS 
-def fetchTTSSample(line):
-  global settings, applog, hmqtt
-  fi = '/tmp/GLaDOS-tts-txt.in'
-  fo = '/tmp/GLaDOS-tts-temp-output.wav'
-  if len(line) < 60:
-    text = urllib.parse.quote(cleanTTSLine(line))
-    TTSCommand = 'curl -L --retry 5 --get --fail -o /tmp/GLaDOS-tts-temp-output.wav '+settings.tts_url+text
-  else:
-    with open(fi, "w") as f:
-      f.write(line)
-    TTSCommand = f'curl --retry 5 -F file=@{fi} -o {fo} ' + settings.tts_url
- 
-  TTSResponse = os.system(TTSCommand)
-  
-  if(TTSResponse != 0):
-    applog.debug(f'Failed: TTS fetch phrase {line}')
-    return False
-  if (os.path.getsize(fo) < 1024) :
-    applog.info("Audio file too short")
-    
-  chatio.playFile("/tmp/GLaDOS-tts-temp-output.wav")
-  applog.info(f'Success: TTS played {line}')
-  return True
-  
-
-def glados_answer(internal=False):
-  global applog, microphone,recognizer, settings
-  # get a .wav from the microphone
-  # send that to STT (whisper)
-  # return the response. 
-  fi = '/tmp/whisper-in.wav'
-  fo = '/tmp/whisper-out.json'
-  #if internal is True:
-  # event_gen('begin_stt')
-  import speech_recognition as sr
-  r = sr.Recognizer()
-  with sr.Microphone() as source:
-    audio = r.listen(source)
-    with open(fi, "wb") as f:
-      f.write(audio.get_wav_data())
-    applog.info("calling whisper")
-    cmd = f'curl -F file=@{fi} -o {fo} {settings.stt_host}:{settings.stt_port}'
-    os.system(cmd)
-    dt = {}
-    with open(fo,"r") as f:
-      dt = json.load(f)
-      # print(dt)
-    msg = dt['results'][0]['transcript']
-    applog.info(f'Whisper returns: {msg}')
-    
-    if internal is False:
-      # publish it to mqtt "homie/"+hdevice+"/speech/reply/set"
-      hmqtt.publish(settings.hpub_reply, msg)
-    else:
-      run_machine((Event.sttDone, msg))
-      
-    # TODO - should following line be moved to state_machine?
-    mic_icon(False)
-    
-def glados_ask(code, internal=False):
-  global settings, applog
-  # some messages from trumpybear are mycroft codes. Glados needs to
-  # ask the appropriate question.
-  if code == 'nameis':
-    msg = "Hello sweety! Tell me your name."
-  elif code == 'music_talk':
-    msg = 'I could play you a favorite tune of mine or we could \
-have a conversation. Say music or talk. Pick wisely. Music or Talk?'
-  else:
-    msg = code
-  # speak our prompt msg. Zero length messages are a feature.
-  if len(msg) > 0:
-    fetchTTSSample(msg)
-  mic_icon(True)
-  # because of threading and sync issues (mqtt plus other stuff),
-  # start a new thread to give mic_icon a chance to run first.
-  answer_thr = Thread(target=glados_answer, args=(internal,))
-  answer_thr.start()
-
-  
 def long_timer_fired():
   global five_min_thread
   #mycroft_mute_status()
@@ -537,24 +284,32 @@ def set_ollama_model(model=None):
     applog.warning("No chatbots found")
     
 '''
-STATES:     Idle ---> Listening --->  chat ---> Speaking
+STATES:     Idle ---> Listening --->  chat ---> Speaking --> followup
 
   after leaving speaking state, return to listening state
           next_state = 'listening'
+  0. Idle state: move to listening state when the microphone button is
+    pushed or the wake word is detected or trumpybear and mqtt says to.
           
-  1. listening state call glodos_ask which waits for voice activity
-    to start, then end and after TTS we have a text message.
-    move to chat state
+  1. Listening state:  call ask() which waits for voice activity
+    to start and then to end. It calls whisper to do the STT. 
+    Now we have a text message. If it is 'bye, 'goodbye', quit' or'stop'
+    Then speak the 'bye' and move to Idle state. Else move to chat state.
     
-  2. chat state calls the chatbot and gets an answer (text).
+  2. Chat state calls the chatbot and gets an answer (text).
     moves to Speaking state
     
-  3. Speaking state - sends to message to glados_speak()
-    In the chat situation, Ask whether there is another question
-    and move to Listening State.  Pretty simple.
+  3. Speaking state - sends to message to speak() for tts (GlaDOS voice)
+  
+  4. Followup state - Speaks a prompt for the next question
+    and moves to Listening State.  Note: if there is not a response
+    the idle timer will fire and it moves from listening to idle.
     
-  Until one implements some way to cancel speaking because it's too long
-  an answer or off topic or user is bored or higher level time out.
+  Pressing the stop button, aka mqtt {"cmd": "stop"} has to stop the speech
+  if in Speaking state. 
+  If in chat state - we have to set a flag that the chat response code can check
+  so that if set DO NOT return the message/answer AND move to followup state
+  when the message is complete (vs moving to speak state)
   
   Leave 'idle' state when Trumpybear says to chat (mqtt message)
   return to idle state when 'quit' event arrives.
@@ -563,6 +318,18 @@ STATES:     Idle ---> Listening --->  chat ---> Speaking
     q.put = insert event at beginning.
     q.get = remove event at end
     q.empty test 
+    
+  ========= Apr 6, 2024 ========
+  One possible enhancement is to start talking when a paragraph has been
+  produced from the LLM (via token streaming). 
+  When a paragraph has been received put it in a queue for tts to process.
+  Repeat - enqueuing paragraphs.   
+  
+  Dequeue runs in a separate thread. started/unfrozen whenever the queue has something
+  in it (until empty). 
+  
+  Sadly, it might not improve response times all that much - or even be
+  noticable. 
 '''
 
 eventQ = Queue(5)
@@ -590,13 +357,12 @@ def run_machine(evtTuple=None):
         if msg is None:
           msg = get_greeting()
         new_state = State.listening
-        # glados_ask is going to take some time.
-        mic_show_state("mic_stt")
-        glados_ask(msg, internal=True)
-        # Probably should do nothing
-        # mic_show_state("mic_on") 
+        # ask is going to take some time. notify fron panel process.
+        panel_show_state(State.listening)
+        speechio.ask(msg, internal=True)
       else:
         applog.info('wrong state for beginLoop')
+        panel_show_state(State.idle)
         new_state = State.idle
     elif evt == Event.sttDone:
       if machine_state == State.listening:
@@ -608,28 +374,35 @@ def run_machine(evtTuple=None):
           elif tmsg.startswith('stop'):
             eventQ.put((Event.stop, None))
         else:
-          # send to message to chatbot
-          # TODO publish '{"cmd": "mic_chat"}' 
-          mic_show_state("mic_chat")
           screen_show(False, msg)
+          # TODO Time delay?
+          panel_show_state(State.chatting)
+          new_state = State.chatting
           replythr = Thread(target=call_chatbot, args=(msg,))
           replythr.start()
-          new_state = State.chatting
       else:
         applog.info('wrong state for sttDoneEvent')
+        panel_show_state(State.idle)
         new_state = State.idle
     elif evt == Event.reply:
       if machine_state == State.chatting:
-          # TODO publish '{"cmd": "mic_tts"}' 
-          mic_show_state("mic_tts")
+          panel_show_state(State.speaking)
           screen_show(True, msg)
-          glados_speak(msg)
+          new_state = State.speaking
           time.sleep(1)
-          new_state = State.listening
-          mic_show_state("mic_stt")
-          glados_ask(get_followup(), True)
+          #speak_thr = Thread(target=call_tts, args=(msg,))
+          speak_thr = Thread(target=speechio.speak, args=(msg,))
+          speak_thr.start()
       else:
-        applog.info('wrong state for replyEvent')
+        applog.info('wrong state for reply Event')
+    elif evt == Event.end_speaking:
+      if machine_state == State.speaking:
+          panel_show_state(State.listening)
+          new_state = State.listening
+          time.sleep(1)
+          speechio.ask(get_followup(), True)
+      else:
+        applog.info('wrong state for end_speaking Event')
     elif evt == Event.stop:
       # empty the queue, stops the loop
       while eventQ.empty() is not True:
@@ -644,32 +417,35 @@ def run_machine(evtTuple=None):
         pass
       # move to listen state
       new_state = State.listening
-      mic_show_state("mic_stt")
-      glados_ask(get_followup(), True)
-    elif evt == Event.quit:
-      # TODO we don't need this. Push the glados button instead
-      # if you want a new conversation.
-      # empty the queue, stops the loop
-      while eventQ.empty() is not True:
-        applog.info('remove entry for quitEvent')
-      # cancel the talking - somehow
-      # move to idle state.
-      new_state = State.idle
+      panel_show_state(State.listening)
+      speechio.ask(get_followup(), True)
     elif evt == Event.switchModel:
       # We are starting a new conversation with the new model.
       # msg is a string with the model name 
+      if machine_state == State.chatting:
+        speech_stop()
       chatbot.init_llm(chatbot.host, msg)
       applog.info(f"switching to {msg} LLM")
       new_state = State.listening
-      mic_show_state("mic_stt")
-      glados_ask(get_followup(), True)
+      panel_show_state(State.listening)
+      speechio.ask(get_followup(), True)
     else:
       applog.info('incorrect event')
       
     prev = machine_state
     machine_state = new_state
     applog.info(f'SM End: evt: {evt} entry: {prev} exit: {machine_state}')
-        
+    
+    
+def panel_show_state(st: State) -> None:
+  hmqtt.publish(settings.mic_pub_topic,json.dumps(
+        {"cmd": "bridge_machine", 
+        "state": st.value}))
+
+# runs in a thread, calls into statemachine when finished.
+def speech_start():
+  speechio.speak(msg)
+  run_machine((Event.end_speaking, None))
 
 # send the text to the screen (via mqtt) along with an indicator that is
 # is the question or the answer in case the display wants to highlight things.
@@ -683,13 +459,13 @@ def screen_show(is_answer, msg):
 # Cancel/stop the speaking. We could mute things but that's not really
 # stopping anything.
 def speech_stop():
-  global applog, chatbot, cancel_audio_out
   applog.info("Attempt canceling of speech")
-  cancel_audio_out = True
+  speechio.cancel_audio_out = True
   # display a message 
-  screen_show(False, "[Canceled GLaDOS Speaking]")
-  # glados_speak has a sleep it in - Good place to do other things
-  glados_speak("OK. Cancelling, if you must")
+  screen_show(False, "[GLaDOS Speaking Canceled]")
+  speechio.speak("OK. Cancelling, if you must")
+  # we need time for the OK message to finish before we speak again,
+  time.sleep(0.5)
    
 def manage_chat(msg: str):
   global machine_state
@@ -941,7 +717,7 @@ def strobeCb(msg):
 
     
 def main():
-  global isPi, settings, hmqtt, applog, wss_server, audiodev
+  global settings, hmqtt, applog, wss_server, audiodev
   global microphone, recognizer
   # process cmdline arguments
   loglevels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
@@ -965,11 +741,12 @@ def main():
   else:
     logging.basicConfig(level=logging.INFO,datefmt="%H:%M:%S",format='%(asctime)s %(levelname)-5s %(message)s')
   
-  isPi = os.uname()[4].startswith("arm")
+  #isPi = os.uname()[4].startswith("arm")
   
   settings = Settings(args["conf"], 
                       applog)
   settings.print()
+  
   mqtt_conn_init(settings)
   # setup pulseaudio and device volumes.
   audiodev = AudioDev()
@@ -1002,7 +779,15 @@ def main():
   applog.info(f"Mic index: {settings.microphone_index}")
   #microphone = speech_recog.Microphone(device_index=settings.microphone_index)
   microphone = speech_recog.Microphone(device_index=settings.alsa_mic)
-
+  
+  # TODO Eventually, I will regret this shadowing/mirroring of variables.
+  globals.settings = settings  
+  globals.applog = applog  
+  globals.hmqtt = hmqtt
+  globals.recognizer = recognizer
+  globals.microphone = microphone
+  globals.run_machine = run_machine
+  
   # create the ollama object and pull the model 
   set_ollama_model(settings.ollama_model)
   publish_model_names()
