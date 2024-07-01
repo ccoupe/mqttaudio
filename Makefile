@@ -12,7 +12,7 @@ SHELL := /bin/bash
 
 $(HOME)/tb-env:
 	sudo apt install -y python3-venv
-	python -m venv $(HOME)/sb-env
+	python -m venv --system-site-packages $(HOME)/sb-env
 	( \
 	set -e ;\
 	source $(HOME)/sb-env/bin/activate; \

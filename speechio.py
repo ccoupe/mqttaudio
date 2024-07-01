@@ -41,6 +41,8 @@ def playFile(filename: str) -> None:
         if globals.cancel_audio_out:
           globals.cancel_audio_out = False
           data = [] # a len of 0 means we are at the end
+          #return (data, pyaudio.paAbort)
+          return (data, pyaudio.paComplete)
         else:
           data = wf.readframes(frame_count)
         # If len(data) is less than requested frame_count, PyAudio automatically
