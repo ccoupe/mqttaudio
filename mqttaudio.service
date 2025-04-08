@@ -7,4 +7,5 @@ ExecStart=/usr/local/lib/mqttaudio/mqttaudio.sh
 Restart=on-abort
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
+#After=xdg-desktop-autostart.target

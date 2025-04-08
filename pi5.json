@@ -14,13 +14,25 @@
   },
   "microphone": "alsa_input.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.mono-fallback",
   "microphone_volume": 0.73,
+  "microphone_pyaudio _name": "pulse",
+  "speaker": "alsa_output.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.analog-stereo",
   "speaker": "bluez_output.C2_08_9A_CB_33_0C.1",
   "speaker_volume": 0.69,
   "mic_pub_type": "login",
   "mic_pub_topic": "homie/pi5_bear/screen/control/set",
-  "ollama_model": "llama3:8b",
-  "ollama_hosts": ["bronco.local", "bigboy.local"],
+  "ollama_model": "deepseek-r1:14b",
+  "ollama_hosts": ["bigboy.local", "bronco.local"],
   "ollama_port": 11434,
+  "sys_prompt" : "prompt.txt",
   "stt_host": "bronco.local",
-  "stt_port": 5003
+  "stt_port": 5003,
+  "ollama_models": {
+    "pi5-deepseek14b": {"name": "deepseek-r1:14b",  "stream": false,
+      "md_format": false,  "delete_think_blocks": true, 
+      "prompt": "pi5-deepseek.prompt", "use_audible_tag": true},
+    "pi5-zephyr": {"name": "stablelm-zephyr:latest", "stream": true,
+      "md_format": true, "delete_think_blocks": false, 
+      "prompt": "pi5-zeph.prompt"}
+  },
+  "ollama_default_model": "pi5-deepseek14b"
 }

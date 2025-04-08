@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 
-# a word about volumes. 
+# a word about volumes.
 # Hubitat says 0 to 100 with separate mute/unmute commands, up/down commands
 #   don't specify step size. use 5 (aka 5% of 100)
 # OSX volume goes from 0 to 100 - 0 is mute
-# PulseAudio is 0..65536 or nnn% (80%) or +/-n.f db 
+# PulseAudio is 0..65536 or nnn% (80%) or +/-n.f db
 #  we use the nn%
 # Alsa here means raspberry w/o pulseaudo. It might work on other Alsa
 #   systems w/o pulseaudo. I wouldn't depend on it though.
 #   Alsa provides nn% so we use that. alsamixer is confusing about this.
-# Pipewire - sigh. The code assumes that pactl works - ie pulseaudio 
+# Pipewire - sigh. The code assumes that pactl works - ie pulseaudio
 #   bridge to Pipewire is setup and working. Like on a Raspberry pi running
 #   Bookworm. I should do something with wpctl - I can get info easier and it
 #   would not depend on pactl.
 #   80 means 80% or as pipewire perfers 0.80. We scale to the integer number - yes
-#   in can go higher, up to 150. 
+#   in can go higher, up to 150.
 
 import sys
 import os
 from os import path
 import re
 import json
+
 
 class AudioDev:
 
@@ -32,13 +33,13 @@ class AudioDev:
     self.isPipeWire = False
     self.sink_dev = None
     self.sink_idx = None
-    self.sink_volume = None # 0..100
+    self.sink_volume = None  # 0..100
     self.source_dev = None
     self.broken = False
     self.play_mp3_cmd = ''
     self.play_wav_cmd = ''
     if self.isLinux:
-      #print("Linux")
+      # print("Linux")
       if self.findPipeWire():
         self.isPipeWire = True
         self.pipewire_config()
@@ -49,25 +50,26 @@ class AudioDev:
         self.pulse_config()
         self.play_mp3_cmd = 'mpg123 -q --no-control'
         self.play_wav_cmd = 'paplay'
-        #print(f'sink: {self.sink_idx} {self.sink_dev} {self.sink_volume}')
+        # print(f'sink: {self.sink_idx} {self.sink_dev} {self.sink_volume}')
       else:
         self.isAlsa = True
         self.play_mp3_cmd = 'mpg123 -q --no-control'
         self.play_wav_cmd = 'aplay -q'
         self.alsa_config()
-        #print(f'sink: {self.sink_idx} {self.sink_dev} {self.sink_volume}')
+        # print(f'sink: {self.sink_idx} {self.sink_dev} {self.sink_volume}')
     if self.isDarwin:
       self.osx_config()
       self.play_mp3_cmd = 'afplay'
       self.play_wav_cmd = 'afplay'
-      #print(f'sink: {self.sink_idx} {self.sink_dev} {self.sink_volume}')
+      # print(f'sink: {self.sink_idx} {self.sink_dev} {self.sink_volume}')
       
   def osx_config(self):
     # get current volume
-    val = os.popen("osascript -e 'output volume of (get volume settings)'", mode='r').readlines()
+    val = os.popen("osascript -e 'output volume of (get volume settings)'",
+                   mode='r').readlines()
     for v in val:
       self.sink_volume = int(v)
-      #print(f'vol: {int(v)}')
+      # print(f'vol: {int(v)}')
     self.sink_dev = 'system'
     self.sink_idx = 0
 
@@ -92,9 +94,9 @@ class AudioDev:
           if li['key'] == 'default.configured.audio.sink':
             val = li['value']
             self.sink_dev = val['name']
-            #print("Our Sink:", self.sink_dev)
+            # print("Our Sink:", self.sink_dev)
             self.sink_volume = self.pulse_getvol()
-            #print(f"Our Sink is {self.sink_dev} volume: {self.sink_volume}")
+            # print(f"Our Sink is {self.sink_dev} volume: {self.sink_volume}")
 
   def pipewire_config(self):
     in_audio = False
@@ -123,7 +125,7 @@ class AudioDev:
       if in_audio:
         continue
       elif in_audio_sinks:
-        print('Have',len(ln), ln)
+        print('Have', len(ln), ln)
         in_audio_sinks = False
         continue
       elif in_video:
@@ -151,7 +153,7 @@ class AudioDev:
 
   def findPulse(self):
     if path.exists('/usr/bin/pulseaudio'):
-      #print('Pulse')
+      # print('Pulse')
       return True
     return False
     
@@ -173,17 +175,15 @@ class AudioDev:
     
   def pulse_getvol(self):
     sinks = {}
-    sink_volumes = []
     sink = 0
     sinkn = ''
-    sinkv = ''
     lines = os.popen('pactl list sinks', mode='r').readlines()
     for ln in lines:
       ln = ln.strip()
       if ln.startswith('Sink #'):
         sink = int(ln[6:])
       if ln.startswith('Name:'):
-        sinkn = ln[6:] 
+        sinkn = ln[6:]
       if ln.startswith('Volume:'):
         t = ln[8:]
         m = re.match(r'front-left: (\d+)\s/\s+(\d+)%\s/\s(.+)\sdB,(.*)', t)
@@ -191,17 +191,16 @@ class AudioDev:
           val = int(m.group(1))
           per = int(m.group(2))
           db = float(m.group(3))
-          sinks[sinkn] = {'idx': sink, 'vol': (val,per,db)}
+          sinks[sinkn] = {'idx': sink, 'vol': (val, per, db)}
           if sinkn == self.sink_dev:
-            #print('found default', sinks[sinkn])
+            # print('found default', sinks[sinkn])
             break
         else:
           # expect failures that don't matter i.e. 'mono'
-          #print(f'Failed regex for {t}')
+          # print(f'Failed regex for {t}')
           pass
           
-          
-    #print(sinkn, sinks[self.sink_dev])
+    # print(sinkn, sinks[self.sink_dev])
     d = sinks[self.sink_dev]
     self.sink_idx = d['idx']
     # use % value
@@ -216,8 +215,8 @@ class AudioDev:
         self.sink_dev = m.group(1)
         self.sink_idx = m.group(2)  # not useful
       else:
-        pass     
-    lns = os.popen('amixer controls',mode='r').readlines()
+        pass
+    lns = os.popen('amixer controls', mode='r').readlines()
     for ln in lns:
       ln = ln.strip()
       m = re.match(r'numid=(\d+),iface=MIXER,name=\'(\w+) Playback Volume\'', ln)
@@ -235,26 +234,27 @@ class AudioDev:
       ln = ln.strip()
       m = re.match(r'.*\[(\d+)%\]', ln)
       if m:
-        #print('found', m.group(1))
+        # print('found', m.group(1))
         # on Pi this is the only one. Not so on others, but first one
         # is usually 'Master' which is what we need
         return int(m.group(1))
         
   def get_volume(self):
     # get from the system/pulse/alsa system. slower than reading the property
-    # Still it's useful for checking 
+    # Still it's useful for checking
     if self.isDarwin:
-      val = os.popen("osascript -e 'output volume of (get volume settings)'", mode='r').readlines()
+      val = os.popen("osascript -e 'output volume of (get volume settings)'",
+                     mode='r').readlines()
       for v in val:
         self.sink_volume = int(v)
-    elif self.isPipeWire: 
-       self.sink_volume = self.pipewire_getvol()     
+    elif self.isPipeWire:
+      self.sink_volume = self.pipewire_getvol()
     elif self.isPulse:
       self.sink_volume = self.pulse_getvol()
     elif self.isAlsa:
       self.sink_volume = self.alsa_getvol()
     else:
-      raise Exception ("unknown sound system")
+      raise Exception("unknown sound system")
     return self.sink_volume
        
   def set_volume(self, amt):
@@ -270,18 +270,19 @@ class AudioDev:
       tv = self.sink_volume
       os.system(f'pactl set-sink-volume {self.sink_dev} {tv}%')
     elif self.isAlsa:
-      lns = os.popen(f'amixer cset numid={self.sink_idx} {self.sink_volume}%',
-          mode='r').readlines
+      os.popen(f'amixer cset numid={self.sink_idx} {self.sink_volume}%',
+               mode='r').readlines
     else:
-      raise Exception ("unknown sound system")
-    
+      raise Exception("unknown sound system")
+
+   
 if __name__ == '__main__':
   # a little test program
   ad = AudioDev()
   print('output to:', ad.sink_dev)
   pv = ad.get_volume()
   print('cur vol:', pv)
-  #ad.set_volume(60)
+  # ad.set_volume(60)
   ad.set_volume(120)
   print('new vol:', ad.sink_volume, ad.get_volume())
   ad.set_volume(pv)

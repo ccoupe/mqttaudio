@@ -1,5 +1,6 @@
 opencv-contrib-python
-imutil
+imutils
+globals
 zmq
 paho-mqtt
 websocket-client
@@ -7,6 +8,7 @@ python-vlc
 websockets
 pulsectl
 SpeechRecognition
+sounddevice
 pipewire_python
 pyaudio
 ollama

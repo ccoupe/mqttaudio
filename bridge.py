@@ -1,5 +1,5 @@
-# 
-# Mqtt <-> mycroft message bus. Very incomplete. 
+#
+# Mqtt <-> mycroft message bus. Very incomplete.
 # Very specific to my needs: Assumes homie and my hardware in it
 # which is also very specific and only *looks* homie compatible.
 # In particular, we turn on the 'voice' part of mycroft when we need it
@@ -11,17 +11,18 @@ import paho.mqtt.client as mqtt
 import sys
 import json
 import argparse
-import warnings
-from datetime import datetime
-import time, threading, sched
+# from datetime import datetime
+import time
+import threading
 from threading import Lock, Thread
 import socket
-import os
+# import os
 from lib.Settings import Settings
 from lib.Audio import AudioDev
 from lib.Chatbot import Chatbot
+# Fix the alsa 'error' message by importing sounddevice. Don't know why.
+# import sounddevice
 import speechio
-import globals
 from subprocess import Popen
 import urllib.request
 from lib.Constants import State, Event
@@ -29,79 +30,91 @@ import logging
 import logging.handlers
 import asyncio
 import websockets
-import websocket
+# import websocket
 import pulsectl
-
-#from subprocess import call
-#import urllib.parse
-#import re
+# import re
 import speech_recognition as speech_recog
 import random
 from queue import Queue
-import requests
-import globals
+# import requests
+import gvars
 
-# Global for this file/module
+# Global variables for all files
+# These need global statements when referenced in a function/method
 machine_state = None
 five_min_thread = None
+settings = None
+applog = None
+hmqtt = None
+# These 'variables' are in gvars.py - module scope
+'''
+recognizer = None
+microphone = None
+run_machine = None
+muted = False
+chatbot = None
+'''
+
 
 def mqtt_conn_init(st):
   global hmqtt
   hmqtt = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, st.mqtt_client_name, False)
   hmqtt.connect(st.mqtt_server_ip, st.mqtt_port)
-  toplevel = 'homie/'+st.homie_device
-  hmqtt.publish(toplevel, None, qos=1,retain=True)
+  toplevel = 'homie/' + st.homie_device
+  hmqtt.publish(toplevel, None, qos=1, retain=True)
   prefix = toplevel + '/speech'
-  hmqtt.publish(prefix+'/say/set', None, qos=1,retain=False)
-  st.hsub_say = prefix+'/say/set'
+  hmqtt.publish(prefix + '/say/set', None, qos=1, retain=False)
+  st.hsub_say = prefix + '/say/set'
   hmqtt.subscribe(st.hsub_say)
   
-  hmqtt.publish(prefix+'/ask/set', None, qos=1,retain=False)
-  st.hsub_ask = prefix+'/ask/set'
+  hmqtt.publish(prefix + '/ask/set', None, qos=1, retain=False)
+  st.hsub_ask = prefix + '/ask/set'
   hmqtt.subscribe(st.hsub_ask)
   
-  hmqtt.publish(prefix+'/ctl/set', None, qos=1,retain=False)
-  st.hsub_ctl = prefix+'/ctl/set'
+  hmqtt.publish(prefix + '/ctl/set', None, qos=1, retain=False)
+  st.hsub_ctl = prefix + '/ctl/set'
   hmqtt.subscribe(st.hsub_ctl)
+  applog.info(f'Subscribed to {st.hsub_ctl}')
     
   # publish to reply - do not subscribe to it.
-  hmqtt.publish(prefix+'/reply/set', None, qos=1,retain=False)
-  st.hpub_reply = prefix+'/reply/set'
-  #hmqtt.subscribe(st.hsub_reply)
+  hmqtt.publish(prefix + '/reply/set', None, qos=1, retain=False)
+  st.hpub_reply = prefix + '/reply/set'
+  # hmqtt.subscribe(st.hsub_reply)
 
-  st.hsub_play = 'homie/'+st.homie_device+'/player/url/set'
-  hmqtt.publish(st.hsub_play, None, qos=1,retain=False)
+  st.hsub_play = 'homie/' + st.homie_device + '/player/url/set'
+  hmqtt.publish(st.hsub_play, None, qos=1, retain=False)
   hmqtt.subscribe(st.hsub_play)
   
-  st.hsub_play_vol = 'homie/'+st.homie_device+'/player/volume/set'
-  hmqtt.publish(st.hsub_play_vol, None, qos=1,retain=False)
+  st.hsub_play_vol = 'homie/' + st.homie_device + '/player/volume/set'
+  hmqtt.publish(st.hsub_play_vol, None, qos=1, retain=False)
   hmqtt.subscribe(st.hsub_play_vol)
 
-  st.hsub_chime = 'homie/'+st.homie_device+'/chime/state/set'
-  hmqtt.publish(st.hsub_chime, None, qos=1,retain=False)
+  st.hsub_chime = 'homie/' + st.homie_device + '/chime/state/set'
+  hmqtt.publish(st.hsub_chime, None, qos=1, retain=False)
   hmqtt.subscribe(st.hsub_chime)
   
-  st.hsub_chime_vol = 'homie/'+st.homie_device+'/chime/volume/set'
-  hmqtt.publish(st.hsub_chime_vol, None, qos=1,retain=False)
+  st.hsub_chime_vol = 'homie/' + st.homie_device + '/chime/volume/set'
+  hmqtt.publish(st.hsub_chime_vol, None, qos=1, retain=False)
   hmqtt.subscribe(st.hsub_chime_vol)
   
-  st.hsub_siren = 'homie/'+st.homie_device+'/siren/state/set'
-  hmqtt.publish(st.hsub_siren, None, qos=1,retain=False)
+  st.hsub_siren = 'homie/' + st.homie_device + '/siren/state/set'
+  hmqtt.publish(st.hsub_siren, None, qos=1, retain=False)
   hmqtt.subscribe(st.hsub_siren)
   
-  st.hsub_siren_vol = 'homie/'+st.homie_device+'/siren/volume/set'
-  hmqtt.publish(st.hsub_siren_vol, None, qos=1,retain=False)
+  st.hsub_siren_vol = 'homie/' + st.homie_device + '/siren/volume/set'
+  hmqtt.publish(st.hsub_siren_vol, None, qos=1, retain=False)
   hmqtt.subscribe(st.hsub_siren_vol)
   
-  st.hsub_strobe = 'homie/'+st.homie_device+'/strobe/state/set'
-  hmqtt.publish(st.hsub_strobe, None, qos=1,retain=False)
+  st.hsub_strobe = 'homie/' + st.homie_device + '/strobe/state/set'
+  hmqtt.publish(st.hsub_strobe, None, qos=1, retain=False)
   hmqtt.subscribe(st.hsub_strobe)
       
   hmqtt.on_message = mqtt_message
   hmqtt.loop_start()
 
+
 def mqtt_message(client, userdata, message):
-  global settings, applog, muted
+  global settings, applog
   topic = message.topic
   payload = str(message.payload.decode("utf-8"))
   applog.info(f"mqtt: {topic} => {payload}")
@@ -125,31 +138,31 @@ def mqtt_message(client, userdata, message):
     if payload[0] == '{':
       # assume it is json
       mqtt_json_in(topic, json.loads(payload))
-    elif payload == 'on' and muted == True:
+    elif payload == 'on' and gvars.muted is True:
       # Use pulseaudio to unmute mic and speaker
       applog.info('Pulseaudo unmuted')
       settings.pulse.source_mute(settings.microphone_index, 0)
       settings.pulse.sink_mute(settings.speaker_index, 0)
-      muted = False
+      gvars.muted = False
       mic_icon(True)
-      #time.sleep(1)
-    elif payload == 'off' and globals.muted == False:
+      # time.sleep(1)
+    elif payload == 'off' and gvars.muted is False:
       # Use pulseaudio to mute mic and speaker
       applog.info('Pulseaudo muted')
       settings.pulse.source_mute(settings.microphone_index, 1)
       settings.pulse.sink_mute(settings.speaker_index, 1)
-      muted = True
+      gvars.muted = True
       mic_icon(False)
     elif payload == 'toggle':
-      applog.info(f'Mic Toggle from Mute: {muted} to {not muted}')
-      settings.pulse.source_mute(settings.microphone_index, not muted)
-      muted = not muted
-      mic_icon(muted)
+      applog.info(f'Mic Toggle from Mute: {gvars.muted} to {not gvars.muted}')
+      settings.pulse.source_mute(settings.microphone_index, not gvars.muted)
+      gvars.muted = not gvars.muted
+      mic_icon(gvars.muted)
     elif payload == 'test_tts':
       speechio.test_tts()
     elif payload == '?':
       if settings.engine_nm == 'mycroft':
-        #mycroft_mute_status()
+        # mycroft_mute_status()
         pass
     elif payload == 'chat':
       manage_chat(payload)
@@ -183,33 +196,40 @@ def mqtt_message(client, userdata, message):
 
   else:
     applog.debug("unknown topic {}".format(topic))
- 
+
+
 # Over time, more commands can be moved into json and handled here.
 def mqtt_json_in(topic, dt):
   global chatbot, hmqtt, applog
   applog.info(f"In mqtt_json_in: {dt}")
   if dt.get("cmd", None):
-    cmd = dt.get("cmd")
-    if cmd == 'llm_models':
+    subcmd = dt.get("cmd")
+    if subcmd == 'llm_models':
       # return 'cmd: reply, llm_models: [....]
       publish_model_names()
-    elif cmd == "llm_default":
+    elif subcmd == 'reply':
+      applog.info('mqtt_json_in: ignore our reply')
+    elif subcmd == "llm_default":
+      # does this get or set default?
       model = dt.get("model", None)
-      # route this through the statemachine Event.switchModel
+      # route this through the statemachine Event.switchModel?
       run_machine((Event.switchModel, model))
+    else:
+      applog.info(f'mqtt_json_in: ignore subcmd {subcmd}')
       
 
 def publish_model_names():
   global chatbot, hmqtt, applog
-  hsh = {"cmd": "reply"} 
+  hsh = {"cmd": "reply"}
   hsh["llm_models"] = chatbot.list_model_names()
   hsh["llm_default"] = chatbot.model_name
   applog.info(f'Sending {hsh}')
   hmqtt.publish(settings.mic_pub_topic, json.dumps(hsh), qos=1)
 
+
 # manage the microphone icon or indicator. Muting the mic is
 # done elsewhere. Not here. The icon shows if the 'machine' is
-# actively listening for mic activity.  
+# actively listening for mic activity.
 # Muting is subtlely different - it's a physical control.
 def mic_icon(onoff):
   global hmqtt, applog, settings
@@ -228,7 +248,8 @@ def mic_icon(onoff):
     hmqtt.publish(settings.mic_pub_topic, cmd, qos=1)
   # expidite the message. Doc says don't do this. They mean it.
   # hmqtt.loop()
-  
+
+ 
 def mic_show_state(msg):
   # msg is 'mic_chat', or mic_stt' or 'mic_tts'
   global applog
@@ -237,39 +258,54 @@ def mic_show_state(msg):
   dt['cmd'] = msg
   hmqtt.publish(settings.mic_pub_topic, json.dumps(dt), qos=1)
 
+
 def long_timer_fired():
   global five_min_thread
-  #mycroft_mute_status()
+  # mycroft_mute_status()
   five_min_thread = threading.Timer(5 * 60, long_timer_fired)
   five_min_thread.start()
+
 
 def five_min_timer():
   global five_min_thread
-  print('creating long timer')
+  # print('creating long timer')
   five_min_thread = threading.Timer(5 * 60, long_timer_fired)
   five_min_thread.start()
 
+
 #  ------ Manages chat bots conversation  -------
-#   uses a hand crafted state machine.  
-
+#   uses a hand crafted state machine.
 def call_chatbot(msg):
-      global settings, applog, chatbot
-      # TODO set_ollama_model needs to be triggered by Login From Panel mqtt message.
-      # 
-      chatbot.messages.append({"role": "user", "content": msg})
-      ok, message = chatbot.call_ollama(chatbot.messages)
-      chatbot.messages.append(message)
-      print("\n\n")
-      if ok:
-        content = message['content']
-        applog.info(f'Chat Result: {content}')
-        run_machine((Event.reply, content))
-      else:
-        applog.info('Failed POST to chatbot', message)
+  global settings, applog, chatbot
+  # TODO set_ollama_model needs to be triggered by Login From Panel mqtt message.
+  if chatbot.messages is None or len(chatbot.messages) <= 0:
+    chatbot.messages = []
+    if chatbot.prompt is not None:
+      with open('prompts/' + chatbot.prompt, "r") as f:
+        sys_prompt = f.read()
+        chatbot.messages.append({"role": "system", "content": sys_prompt})
+        applog.info(f"setting system prompt to '{sys_prompt}'")
+  
+  chatbot.messages.append({"role": "user", "content": msg})
+  tks, message = chatbot.call_ollama(chatbot.messages)
+  # Really should have call_ollama return the []
+  chatbot.messages.append({'content': message, 'role': "assistant"})
+  print("\n\n")
+  if tks > 0.0:
+    applog.info(f'Chat Result: {tks} {message}')
+    run_machine((Event.reply, message))
+  else:
+    applog.info('Failed POST to chatbot', message)
 
-def set_ollama_model(model=None):
+
+def set_ollama_model():
+  """ Verify that the model in settings.ollama_default_model exists at
+  the host(one of the servers listed).
+  """
   global chatbot, settings, applog
-  chatbot = Chatbot(applog, settings.ollama_hosts, settings.ollama_port)
+  chatbot = Chatbot(applog, settings.ollama_hosts, settings.ollama_port, speechio)
+  model = settings.ollama_models[settings.ollama_default_model]
+  # print('This tweak', model)
   if model is not None:
     # use the first responding chatbot
     applog.info(f"Look for a chatbot from: {settings.ollama_hosts}")
@@ -277,11 +313,14 @@ def set_ollama_model(model=None):
       try:
         chatbot.init_llm(host, model)
         # we only get here if there was no exception
-        applog.info(f"Loaded {model} model")
+        applog.info(f"Loaded {model} model from {host}")
         return
       finally:
         pass
     applog.warning("No chatbots found")
+  else:
+    applog.info('default llm model not found')
+    
     
 '''
 STATES:     Idle ---> Listening --->  chat ---> Speaking --> followup
@@ -292,7 +331,7 @@ STATES:     Idle ---> Listening --->  chat ---> Speaking --> followup
     pushed or the wake word is detected or trumpybear and mqtt says to.
           
   1. Listening state:  call ask() which waits for voice activity
-    to start and then to end. It calls whisper to do the STT. 
+    to start and then to end. It calls whisper to do the STT.
     Now we have a text message. If it is 'bye, 'goodbye', quit' or'stop'
     Then speak the 'bye' and move to Idle state. Else move to chat state.
     
@@ -306,7 +345,7 @@ STATES:     Idle ---> Listening --->  chat ---> Speaking --> followup
     the idle timer will fire and it moves from listening to idle.
     
   Pressing the stop button, aka mqtt {"cmd": "stop"} has to stop the speech
-  if in Speaking state. 
+  if in Speaking state.
   If in chat state - we have to set a flag that the chat response code can check
   so that if set DO NOT return the message/answer AND move to followup state
   when the message is complete (vs moving to speak state)
@@ -317,35 +356,37 @@ STATES:     Idle ---> Listening --->  chat ---> Speaking --> followup
   Use a Queue to co-ordinate event creation and removal (FIFO)
     q.put = insert event at beginning.
     q.get = remove event at end
-    q.empty test 
+    q.empty test
     
   ========= Apr 6, 2024 ========
   One possible enhancement is to start talking when a paragraph has been
-  produced from the LLM (via token streaming). 
+  produced from the LLM (via token streaming).
   When a paragraph has been received put it in a queue for tts to process.
-  Repeat - enqueuing paragraphs.   
+  Repeat - enqueuing paragraphs.
   
   Dequeue runs in a separate thread. started/unfrozen whenever the queue has something
-  in it (until empty). 
+  in it (until empty).
   
   Sadly, it might not improve response times all that much - or even be
-  noticable. 
+  noticable.
 '''
 
+
 eventQ = Queue(5)
-            
+
+
 def run_machine(evtTuple=None):
   global machine_state, applog, settings, hmqtt, eventQ, chatbot
   if eventQ.empty and evtTuple:
     eventQ.put(evtTuple)
   else:
-    # This is likely to be re-entrant so queue event. The other thread 
+    # This is likely to be re-entrant so queue event. The other thread
     # will dequeue it, Hopefully.
     eventQ.put(evtTuple)
     return
   while eventQ.empty() is not True:
     evtpl = eventQ.get()
-    if evtpl is None: 
+    if evtpl is None:
       applog.info('empty queue - was expecting something')
       new_state = State.idle
     evt = evtpl[0]
@@ -366,7 +407,7 @@ def run_machine(evtTuple=None):
         new_state = State.idle
     elif evt == Event.sttDone:
       if machine_state == State.listening:
-        # msg is from STT - ie Whisper is finished. 
+        # msg is from STT - ie Whisper is finished.
         if len(msg) < 6:
           tmsg = msg.lower()
           if tmsg.startswith('quit'):
@@ -390,9 +431,8 @@ def run_machine(evtTuple=None):
           screen_show(True, msg)
           new_state = State.speaking
           time.sleep(1)
-          #speak_thr = Thread(target=call_tts, args=(msg,))
-          speak_thr = Thread(target=speechio.speak, args=(msg,))
-          speak_thr.start()
+          # speak_thr = Thread(target=speechio.speak, args=(msg,))
+          # speak_thr.start()
       else:
         applog.info('wrong state for reply Event')
     elif evt == Event.end_speaking:
@@ -421,14 +461,15 @@ def run_machine(evtTuple=None):
       speechio.ask(get_followup(), True)
     elif evt == Event.switchModel:
       # We are starting a new conversation with the new model.
-      # msg is a string with the model name 
+      # msg is a string with the model name
       if machine_state == State.chatting:
         speech_stop()
-      chatbot.init_llm(chatbot.host, msg)
-      applog.info(f"switching to {msg} LLM")
-      new_state = State.listening
-      panel_show_state(State.listening)
-      speechio.ask(get_followup(), True)
+      if msg != settings.ollama_model:
+        applog.info(f"switching to {msg} LLM")
+        set_ollama_model(msg)
+        new_state = State.listening
+        panel_show_state(State.listening)
+        speechio.ask(get_followup(), True)
     else:
       applog.info('incorrect event')
       
@@ -438,41 +479,45 @@ def run_machine(evtTuple=None):
     
     
 def panel_show_state(st: State) -> None:
-  hmqtt.publish(settings.mic_pub_topic,json.dumps(
-        {"cmd": "bridge_machine", 
-        "state": st.value}))
+  hmqtt.publish(settings.mic_pub_topic, json.dumps(
+                {"cmd": "bridge_machine",
+                 "state": st.value}))
+
 
 # runs in a thread, calls into statemachine when finished.
 def speech_start():
   speechio.speak(msg)
   run_machine((Event.end_speaking, None))
 
+
 # send the text to the screen (via mqtt) along with an indicator that is
 # is the question or the answer in case the display wants to highlight things.
 def screen_show(is_answer, msg):
   global hmqtt, settings, applog
-  hmqtt.publish(settings.mic_pub_topic,json.dumps(
-        {"cmd": "write_screen", 
-        "answer": is_answer, 
-        "text": msg}))
+  hmqtt.publish(settings.mic_pub_topic, json.dumps(
+                {"cmd": "write_screen",
+                 "answer": is_answer,
+                 "text": msg}))
+
 
 # Cancel/stop the speaking. We could mute things but that's not really
 # stopping anything.
 def speech_stop():
   applog.info("Attempt canceling of speech")
-  speechio.cancel_audio_out = True
-  # display a message 
+  speechio.stop_audio(True)
+  # display a message
   screen_show(False, "[GLaDOS Speaking Canceled]")
   speechio.speak("OK. Cancelling, if you must")
   # we need time for the OK message to finish before we speak again,
   time.sleep(0.5)
+   
    
 def manage_chat(msg: str):
   global machine_state
   if msg == 'chat':
     machine_state = State.idle
     # Force mic on.
-    if muted:
+    if gvars.muted:
       # unmute
       settings.pulse.source_mute(settings.microphone_index, 0)
       settings.pulse.sink_mute(settings.speaker_index, 0)
@@ -484,22 +529,25 @@ def manage_chat(msg: str):
     run_machine((Event.stop, None))
 
     
-greet_str = ["You again? Very well. Ask me your question?", 
-            "I'm waiting, breathlessly.", 
-            "Ask your question before I change my mind",
-            "Oh! Its the smart one! What do you want"]
-followup_str = ["Your turn to talk", 
-            "It's Bozo's turn to speak.",
-             "Anything Else?", 
-             "I am waiting for a human to speak",
-             "Talk sexy to me. I dare you"]
+greet_str = ["You again? Very well. Ask me your question?",
+             "I'm waiting, breathlessly.",
+             "Ask your question before I change my mind",
+             "Oh! Its the smart one! What do you want"]
+followup_str = ["Your turn to talk",
+                "It's Bozo's turn to speak.",
+                "Anything Else?",
+                "I am waiting for a human to speak",
+                "Talk sexy to me. I dare you"]
+
 
 def get_greeting():
   return random.choice(greet_str)
-  
+
+
 def get_followup():
   return random.choice(followup_str)
-    
+
+ 
 # ----- websocket server - send payload to mqtt ../reply/set
   
 async def wss_reply(ws, path):
@@ -508,13 +556,15 @@ async def wss_reply(ws, path):
   applog.info('wss: message received:  %s' % message)
   hmqtt.publish(settings.hpub_reply, message)
 
+
 def wss_server_init(st):
   global wss_server
-  #websocket.enableTrace(True)
-  IPAddr = socket.gethostbyname(socket.gethostname()) 
+  # websocket.enableTrace(True)
+  IPAddr = socket.gethostbyname(socket.gethostname())
   wsadr = "ws://%s:5125/reply" % IPAddr
   applog.info(wsadr)
   wss_server = websockets.serve(wss_reply, IPAddr, 5125)
+
 
 # TODO Don't use pulsectl module for pipeware - even if it works.
 # Better to parse wpctl status output eh?
@@ -528,7 +578,7 @@ def pipewire_setup(settings):
       pulse.default_set(src)
       applog.info(f'Microphone index = {settings.microphone_index}')
   for sink in pulse.sink_list():
-    #applog.info(f'{sink.name} =? {settings.speaker}')
+    # applog.info(f'{sink.name} =? {settings.speaker}')
     print('PWire Setup Sink:', sink)
     if sink.name == settings.speaker:
       settings.speaker_index = sink.index
@@ -537,13 +587,13 @@ def pipewire_setup(settings):
       applog.info(f'Speaker index = {settings.speaker_index}')
         
   if settings.microphone_index is None:
-    applog.error('Missing or bad Microphone setting')
+    applog.error('Pipewire: Missing or bad Microphone setting')
     exit()
   else:
     pulse.volume_set_all_chans(settings.source, settings.microphone_volume)
     
   if settings.speaker_index is None:
-    applog.error('Missing or bad Speaker setting')
+    applog.error('Pipewire: Missing or bad Speaker setting')
     exit()
   else:
     pulse.volume_set_all_chans(settings.sink, settings.speaker_volume)
@@ -551,16 +601,18 @@ def pipewire_setup(settings):
   # save the pulse object so we can call it later.
   settings.pulse = pulse
 
+
 def pulse_setup(settings):
   pulse = pulsectl.Pulse('mqttmycroft')
   for src in pulse.source_list():
+    applog.info(f'Pulse Source {src}')
     if src.name == settings.microphone:
       settings.microphone_index = src.index
       settings.source = src
       pulse.default_set(src)
       applog.info(f'Microphone index = {settings.microphone_index}')
   for sink in pulse.sink_list():
-    #applog.info(f'{sink.name} =? {settings.speaker}')
+    applog.info(f'{sink.name} =? {settings.speaker}')
     if sink.name == settings.speaker:
       settings.speaker_index = sink.index
       settings.sink = sink
@@ -568,13 +620,13 @@ def pulse_setup(settings):
       applog.info(f'Speaker index = {settings.speaker_index}')
         
   if settings.microphone_index is None:
-    applog.error('Missing or bad Microphone setting')
+    applog.error('Pulse: Missing or bad Microphone setting')
     exit()
   else:
     pulse.volume_set_all_chans(settings.source, settings.microphone_volume)
     
   if settings.speaker_index is None:
-    applog.error('Missing or bad Speaker setting')
+    applog.error('Pulse: Missing or bad Speaker setting')
     exit()
   else:
     pulse.volume_set_all_chans(settings.sink, settings.speaker_volume)
@@ -582,12 +634,14 @@ def pulse_setup(settings):
   # save the pulse object so we can call it later.
   settings.pulse = pulse
 
-# Hubitat 'devices' 
+
+# Hubitat 'devices'
 def mp3_player(fp):
   global player_obj, applog, audiodev
   cmd = f'{audiodev.play_mp3_cmd} {fp}'
   player_obj = Popen('exec ' + cmd, shell=True)
   player_obj.wait()
+
 
 # Restore volume if it was changed
 def player_reset():
@@ -597,12 +651,13 @@ def player_reset():
     settings.player_vol = settings.player_vol_default
     audiodev.set_volume(settings.player_vol_default)
 
+
 def playUrl(url):
   global hmqtt, audiodev, applog, settings, player_mp3, player_obj
   applog.info(f'playUrl: {url}')
   tmpf = "/tmp/mqttaudio-tmp.f"
   if url == 'off':
-    if player_mp3 != True:
+    if player_mp3 is not True:
       return
     player_mp3 = False
     applog.info("killing tts")
@@ -621,21 +676,24 @@ def playUrl(url):
     mp3_player(tmpf)
     player_reset()
     applog.info('tts finished')
-  
+
+
 # in order to kill a subprocess running mpg123 (in this case)
-# we need a Popen object. I want the Shell too. 
+# we need a Popen object. I want the Shell too.
 playSiren = False
 siren_obj = None
+
 
 def siren_loop(fn):
   global playSiren, isDarwin, hmqtt, applog, siren_obj
   cmd = f'{audiodev.play_mp3_cmd} sirens/{fn}'
   while True:
-    if playSiren == False:
+    if playSiren is False:
       break
     siren_obj = Popen('exec ' + cmd, shell=True)
     siren_obj.wait()
-    
+
+
 # Restore volume if it was changed
 def siren_reset():
   global settings, applog, audiodev
@@ -644,10 +702,11 @@ def siren_reset():
     settings.siren_vol = settings.siren_vol_default
     audiodev.set_volume(settings.siren_vol_default)
 
+
 def sirenCb(msg):
   global applog, hmqtt, playSiren, siren_obj, audiodev
   if msg == 'off':
-    if playSiren == False:
+    if playSiren is False:
       return
     playSiren = False
     applog.info("killing siren")
@@ -671,11 +730,13 @@ def sirenCb(msg):
 play_chime = False
 chime_obj = None
 
+
 def chime_mp3(fp):
   global chime_obj, applog, audiodev
   cmd = f'{audiodev.play_mp3_cmd} {fp}'
   chime_obj = Popen('exec ' + cmd, shell=True)
   chime_obj.wait()
+
 
 # Restore volume if it was changed
 def chime_reset():
@@ -685,10 +746,11 @@ def chime_reset():
     settings.chime_vol = settings.chime_vol_default
     audiodev.set_volume(settings.chime_vol_default)
 
+
 def chimeCb(msg):
   global applog, chime_obj, play_chime, settings, audiodev
   if msg == 'off':
-    if play_chime != True:
+    if play_chime is not True:
       return
     play_chime = False
     applog.info("killing chime")
@@ -700,7 +762,7 @@ def chimeCb(msg):
       applog.info(f'set chime vol to {settings.chime_vol}')
       audiodev.set_volume(settings.chime_vol)
     flds = msg.split('-')
-    num = int(flds[0].strip())
+    # num = int(flds[0].strip())
     nm = flds[1].strip()
     fn = 'chimes/' + nm + '.mp3'
     applog.info(f'play chime: {fn}')
@@ -710,7 +772,7 @@ def chimeCb(msg):
     applog.info('chime finished')
   
     
-# TODO: order Lasers with pan/tilt motors. Like the turrets? ;-)       
+# TODO: order Lasers with pan/tilt motors. Like the turrets? ;-)
 def strobeCb(msg):
   global applog, hmqtt
   applog.info(f'missing lasers for strobe {msg}, Cheapskate!')
@@ -718,14 +780,14 @@ def strobeCb(msg):
     
 def main():
   global settings, hmqtt, applog, wss_server, audiodev
-  global microphone, recognizer
+  # global microphone, recognizer
   # process cmdline arguments
-  loglevels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
+  # loglevels = ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
   ap = argparse.ArgumentParser()
   ap.add_argument("-c", "--conf", required=True, type=str,
-    help="path and name of the json configuration file")
-  ap.add_argument("-s", "--syslog", action = 'store_true',
-    default=False, help="use syslog")
+                  help="path and name of the json configuration file")
+  ap.add_argument("-s", "--syslog", action='store_true',
+                  default=False, help="use syslog")
   args = vars(ap.parse_args())
   
   # logging setup
@@ -733,18 +795,20 @@ def main():
   applog = logging.getLogger('mqttaudio')
   if args['syslog']:
     applog.setLevel(logging.INFO)
-    handler = logging.handlers.SysLogHandler(address = '/dev/log')
+    handler = logging.handlers.SysLogHandler(address='/dev/log')
     # formatter for syslog (no date/time or appname.
     formatter = logging.Formatter('%(name)s-%(levelname)-5s: %(message)s')
     handler.setFormatter(formatter)
     applog.addHandler(handler)
   else:
-    logging.basicConfig(level=logging.INFO,datefmt="%H:%M:%S",format='%(asctime)s %(levelname)-5s %(message)s')
+    logging.basicConfig(level=logging.INFO, datefmt="%H:%M:%S",
+                        format='%(asctime)s %(levelname)-5s %(message)s')
   
-  #isPi = os.uname()[4].startswith("arm")
-  
-  settings = Settings(args["conf"], 
+  gvars.applog = applog
+  # isPi = os.uname()[4].startswith("arm")
+  settings = Settings(args["conf"],
                       applog)
+  gvars.settings = settings
   settings.print()
   
   mqtt_conn_init(settings)
@@ -755,15 +819,15 @@ def main():
   else:
     pulse_setup(settings)
   # The hubitat devices (player, chime, siren) can have separate
-  # volumes and be restored to their defaults. The computer OS 
+  # volumes and be restored to their defaults. The computer OS
   # and libraries hold the real values so we read them. The OS
-  # might even save them when we change them. 
+  # might even save them when we change them.
   #
   # The tts device (used by the 'engine', aka mycroft or glados)
   # does not change it's volume programmatically but we have
   # coded it like it could. That tts has it's own setting.
-  # A bit confusing. 
-  # 
+  # A bit confusing.
+  #
   settings.player_vol_default = audiodev.sink_volume
   settings.chime_vol_default = audiodev.sink_volume
   settings.siren_vol_default = audiodev.sink_volume
@@ -773,35 +837,44 @@ def main():
   settings.siren_vol = audiodev.sink_volume
   settings.tss_vol = settings.speaker_volume
   
-  recognizer = speech_recog.Recognizer()
-  # TODO Hack in the alsa microphone number
-  settings.alsa_mic = 4
-  applog.info(f"Mic index: {settings.microphone_index}")
-  #microphone = speech_recog.Microphone(device_index=settings.microphone_index)
-  microphone = speech_recog.Microphone(device_index=settings.alsa_mic)
+  applog.info(f"Checking for {settings.microphone_pyaudio} tts microphone")
+  gvars.recognizer = speech_recog.Recognizer()
+  # Get the Alsa microphone index for the pyaudio microphone in the json settings.
+  settings.alsa_mic = -1
+  mic = speech_recog.Microphone()
+  applog.info(f"speech_recog.Microphone is {mic}")
+  for i, microphone_name in enumerate(mic.list_microphone_names()):
+    applog.info(f"have alsa {i} ==> {microphone_name}")
+    if microphone_name == settings.microphone_pyaudio:
+      applog.info(f'Found {settings.microphone_pyaudio}')
+      settings.alsa_mic = i
+  applog.info(f"Mic index: {settings.alsa_mic} for {settings.microphone_pyaudio}")
+  gvars.microphone = speech_recog.Microphone(device_index=settings.alsa_mic)
   
-  # TODO Eventually, I will regret this shadowing/mirroring of variables.
-  globals.settings = settings  
-  globals.applog = applog  
-  globals.hmqtt = hmqtt
-  globals.recognizer = recognizer
-  globals.microphone = microphone
-  globals.run_machine = run_machine
+  # TODO Eventually, I'll regret this setup for global variables.
+  gvars.applog = applog
+  gvars.hmqtt = hmqtt
+  gvars.settings = settings
+  gvars.run_machine = run_machine
+  gvars.muted = False
+  # gvars.chatbot = None
+  gvars.cancel_audio_out: bool = False
+  gvars.settings = settings
   
-  # create the ollama object and pull the model 
-  set_ollama_model(settings.ollama_model)
+  # create the ollama object and pull the model (settings.default)
+  set_ollama_model()
   publish_model_names()
   
   wss_server_init(settings)
   # it doesn't do anything, no need to call it.
-  #five_min_timer()   
+  # five_min_timer()
   asyncio.get_event_loop().run_until_complete(wss_server)
   asyncio.get_event_loop().run_forever()
 
-  # do something magic to integrate the event loops? 
+  # do something magic to integrate the event loops?
   while True:
     time.sleep(5)
 
+
 if __name__ == '__main__':
   sys.exit(main())
-

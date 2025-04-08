@@ -1,12 +1,14 @@
 # Constants
-import enum 
-from enum import IntEnum
+import enum
+# from enum import IntEnum
 
-class State(enum.Enum): 
+
+class State(enum.Enum):
   idle = 0        # Red
   listening = 1   # Green
   chatting = 2    # Yellow
   speaking = 3    # Orange
+  
   
 class Event(enum.Enum):
   beginLoop = 0
