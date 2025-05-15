@@ -48,24 +48,30 @@ def enqueTTS(msg):
 
   gvars.applog.info(f'enqueueTTS()  called, msg len = {len(msg)}: {msg}')
   # replace double asteriks ** and other LLM helpfulness that doesn't
-  # sound well when spoken
+  # sound well when spoken. maybe.
   text = cleanTTSLine(msg)
-  
   # create a temp file pathname for the .wav to be written to
   fo = tempfile.mkstemp(prefix='glados-', suffix='.wav')
   fopname = fo[1]
-  print(f"fopname = {fopname}")
-  # create a temp file pathname for the msg and write msg to it.
-  fi = tempfile.mkstemp(prefix='glados-', suffix='.txt', text=True)
-  fipname = fi[1]
-  fil = open(fipname, mode="w")
-  fil.write(text)
-  fil.close()
-  
+  gvars.applog.info(f"fopname = {fopname}")
   # Queue up that text msg and and the temp path and enter it at the end
   # of the TTS queue. That will cause the thread to process any queued entries
   # including when the file has be created it will be placed on the playQueue
-  gvars.tts_queue.put((fipname, fopname))
+  if gvars.settings.engine_nm == 'glados2':
+    # just pass text strings to TTS
+    dt = {}
+    dt['input'] = text
+    dt['model'] = 'Tacotron'
+    dt['voice'] = 'GlaDOS'
+    gvars.tts_queue.put((dt, fopname))
+  else:
+	  # create a temp file pathname for the msg and write msg to it.
+	  fi = tempfile.mkstemp(prefix='glados-', suffix='.txt', text=True)
+	  fipname = fi[1]
+	  fil = open(fipname, mode="w")
+	  fil.write(text)
+	  fil.close()	  
+	  gvars.tts_queue.put((fipname, fopname))
  
  
 # This is the thread that processes the tts_queue.
@@ -76,10 +82,22 @@ def dequeTTS():
     ent = gvars.tts_queue.get()
     fpin = ent[0]
     fpon = ent[1]
-    # print(f'gvars.applog={gvars.applog}')
-    gvars.applog.info(f'tts queue: create {fpon} from {fpin}')
-    tts_cmd = f'curl --retry 5 -F file=@{fpin} -o {fpon} ' + gvars.settings.tts_url
-    tts_resp = os.system(tts_cmd)
+    if isinstance(fpin, dict): 
+      # version 2 settings.audio_api=='openai' > True. 
+      # fpin is not a file name string
+      jstr = json.dumps(fpin)
+      tts_cmd = (f'curl -H "Authorization: Bearer not-needed"'
+                f' -H "Content-Type: application/json" -d \'{jstr}\''
+                f' -o {fpon} ') + gvars.settings.tts_url
+      gvars.applog.info(f'tts queue: create {fpon} from {fpin}')
+      gvars.applog.info(f'ttscmd: {tts_cmd}')
+      tts_resp = os.system(tts_cmd)
+      
+    else:
+      # print(f'gvars.applog={gvars.applog}')
+      gvars.applog.info(f'tts queue: create {fpon} from {fpin}')
+      tts_cmd = f'curl --retry 5 -F file=@{fpin} -o {fpon} ' + gvars.settings.tts_url
+      tts_resp = os.system(tts_cmd)
   
     # TODO Make exceptions for below conditions
     if tts_resp != 0:
@@ -214,10 +232,12 @@ def answer(internal: bool = False) -> None:
   fo = '/tmp/whisper-out.json'
   
   r = speech_recog.Recognizer()
+  '''
   gvars.microphone = speech_recog.Microphone(
     device_index=gvars.settings.alsa_mic)
- 
+  '''
   with speech_recog.Microphone(device_index=gvars.settings.alsa_mic) as source:
+    gvars.microphone = source
     audio = r.listen(source)
     with open(fi, "wb") as f:
       f.write(audio.get_wav_data())

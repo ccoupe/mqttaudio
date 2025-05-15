@@ -33,7 +33,7 @@ setup_dir:
 	sudo mkdir -p ${DESTDIR}/sirens
 	sudo mkdir -p ${DESTDIR}/prompts
 	sudo cp ${SRCDIR}/Makefile ${DESTDIR}
-	sudo cp ${SRCDIR}/${NODE}.json ${DESTDIR}
+	sudo cp ${SRCDIR}/${NODE}.toml ${DESTDIR}
 	sudo cp ${SRCDIR}/requirements.txt ${DESTDIR}
 	sudo cp ${SRCDIR}/${SERVICE} ${DESTDIR}
 	sudo cp ${SRCDIR}/prompts/* ${DESTDIR}/prompts
@@ -55,9 +55,10 @@ update:
 	sudo cp ${SRCDIR}/lib/*.py ${DESTDIR}/lib
 	sudo cp ${SRCDIR}/*.py ${DESTDIR}
 	sudo cp ${SRCDIR}/${SERVICE} ${DESTDIR}
-	sudo cp ${SRCDIR}/${NODE}.json ${DESTDIR}
+	#sudo cp ${SRCDIR}/${NODE}.json ${DESTDIR}
 	sudo cp ${SRCDIR}/Makefile ${DESTDIR}
 	sudo cp ${SRCDIR}/prompts/* ${DESTDIR}/prompts
+	sudo cp ${SRCDIR}/${NODE}.toml ${DESTDIR}
 	sudo chown -R ${USER} ${DESTDIR}
 
 

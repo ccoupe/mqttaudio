@@ -1,0 +1,22 @@
+[project]
+name = "mqttaudio"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "globals>=0.3.36",
+    "imutils>=0.5.4",
+    "ollama>=0.4.8",
+    "opencv-contrib-python>=4.11.0.86",
+    "paho-mqtt>=2.1.0",
+    "pipewire-python>=0.2.3",
+    "pulsectl>=24.12.0",
+    "pyaudio>=0.2.14",
+    "python-vlc>=3.0.21203",
+    "sounddevice>=0.5.1",
+    "speechrecognition>=3.14.2",
+    "websocket-client>=1.8.0",
+    "websockets>=15.0.1",
+    "zmq>=0.0.0",
+]

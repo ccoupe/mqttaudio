@@ -17,6 +17,7 @@
   "microphone_pyaudio _name": "pulse",
   "speaker": "alsa_output.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.analog-stereo",
   "speaker": "bluez_output.C2_08_9A_CB_33_0C.1",
+  "speaker": "alsa_output.platform-107c701400.hdmi.hdmi-stereo",
   "speaker_volume": 0.69,
   "mic_pub_type": "login",
   "mic_pub_topic": "homie/pi5_bear/screen/control/set",
@@ -32,7 +33,7 @@
       "prompt": "pi5-deepseek.prompt", "use_audible_tag": true},
     "pi5-zephyr": {"name": "stablelm-zephyr:latest", "stream": true,
       "md_format": true, "delete_think_blocks": false, 
-      "prompt": "pi5-zeph.prompt"}
+      "prompt": "pi5-zeph.prompt", "use_audible_tag": false}
   },
   "ollama_default_model": "pi5-deepseek14b"
 }

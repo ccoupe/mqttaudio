@@ -9,7 +9,7 @@ from ollama import Client
 # import wave
 # import time
 # import sys
-# import os
+import os
 # import pyaudio
 import speechio
 import re
@@ -34,7 +34,7 @@ class Chatbot:
     self.cancel_audio_out: bool = False
 
   def init_llm(self, host, model_settings):
-    """ model is a dict (from json settings) that has the processing
+    """ model is a dict (from settings toml) that has the processing
     hints for the model we want.
     """
     model_name = model_settings['name']
@@ -47,12 +47,21 @@ class Chatbot:
     dt = self.client.list()
     # self.log.info(f'Have these models: {dt}')
     self.models = dt['models']
+    self.log.info(f'Have these models: {self.models }')
     for mdl in self.models:
-      self.log.info(f"Have: {mdl['name']}")
-
+      if type(mdl) != dict:
+        # API change from dict to (class ?)
+        self.log.info(f"new: {mdl.model} is type {type(mdl)}")
+      else:
+        self.log.info(f"Have: dict {mdl['name']}")
+    
     self.model_name = None
     for mdl in self.models:
-      if mdl['name'] == model_name:
+      if type(mdl) == dict and mdl['name'] == model_name:
+        self.model_name = model_name
+        break
+      elif mdl.model == model_name:
+        self.log.info(f"matched {mdl}")
         self.model_name = model_name
         break
     
@@ -69,11 +78,11 @@ class Chatbot:
     
     # now process our settings for model_settings, for now these are
     # instance variables
-    # It is appropriate to crash if these are not found
-    self.stream = model_settings['stream']
+    # TODO It is not appropriate to crash if these are not found
+    self.stream = model_settings.get('stream', None)
     self.md_format = model_settings['md_format']
     self.delete_thinking = model_settings["delete_think_blocks"]
-    self.prompt = model_settings["prompt"]
+    self.prompt = model_settings.get("prompt", None)
     self.skip_to_audible = model_settings["use_audible_tag"]
     
   def list_models(self):
@@ -82,8 +91,27 @@ class Chatbot:
   def list_model_names(self):
     mdlnm = []
     for mdl in self.models:
-      mdlnm.append(mdl['name'])
+      if type(mdl) == dict:
+        mdlnm.append(mdl['name'])
+      else:
+        mdlnm.append(mdl.model)
     return mdlnm
+
+  def default_prompt(self, mdl: str, prefix: str):
+    # please, no colons in filename
+    if mdl is None:
+      filename = self.model_name.split(':')[0]
+    else:
+      filename = mdl.split(':')[0]
+    promptf = f"prompts/{prefix}-{filename}.prompt"
+    if not os.path.exists(promptf):
+      with open(promptf, "w") as f:
+        f.write("You are GlaDOS from the game Portal. You are terse, coy and \
+snarky, by default.\nYou are connected to a text to speech device so limit \
+your output to text you want the user to hear audibly.\nDo not output your \
+chain of thought or reasoning.")
+    return promptf
+    
     
   # Use the streaming, non-rest Python API.
   def call_ollama(self, messages):

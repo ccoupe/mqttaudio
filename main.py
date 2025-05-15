@@ -16,7 +16,7 @@ import time
 import threading
 from threading import Lock, Thread
 import socket
-# import os
+import os
 from lib.Settings import Settings
 from lib.Audio import AudioDev
 from lib.Chatbot import Chatbot
@@ -211,8 +211,10 @@ def mqtt_json_in(topic, dt):
       applog.info('mqtt_json_in: ignore our reply')
     elif subcmd == "llm_default":
       # does this get or set default?
+      # CJC: As of 4/10/2025 it 'sets'
       model = dt.get("model", None)
       # route this through the statemachine Event.switchModel?
+      run_machine((Event.stop, None))
       run_machine((Event.switchModel, model))
     else:
       applog.info(f'mqtt_json_in: ignore subcmd {subcmd}')
@@ -277,14 +279,21 @@ def five_min_timer():
 #   uses a hand crafted state machine.
 def call_chatbot(msg):
   global settings, applog, chatbot
-  # TODO set_ollama_model needs to be triggered by Login From Panel mqtt message.
   if chatbot.messages is None or len(chatbot.messages) <= 0:
     chatbot.messages = []
-    if chatbot.prompt is not None:
-      with open('prompts/' + chatbot.prompt, "r") as f:
+    if chatbot.prompt is None:
+      # well hell. This can happen with tblogin switching models.
+      # clean up the name string so it can be a file name
+      promptf = chatbot.default_prompt(None, settings.homie_device)
+    else:
+      promptf = chatbot.prompt
+    try:
+      with open(promptf, "r") as f:
         sys_prompt = f.read()
         chatbot.messages.append({"role": "system", "content": sys_prompt})
         applog.info(f"setting system prompt to '{sys_prompt}'")
+    except Exception as e:
+      raise RuntimeError(f"Problem with {promptf} - does it exist?")
   
   chatbot.messages.append({"role": "user", "content": msg})
   tks, message = chatbot.call_ollama(chatbot.messages)
@@ -298,29 +307,44 @@ def call_chatbot(msg):
     applog.info('Failed POST to chatbot', message)
 
 
-def set_ollama_model():
+def set_ollama_model(mdl_name: str):
   """ Verify that the model in settings.ollama_default_model exists at
   the host(one of the servers listed).
+  
+  self.ollama_default_model is the NAME (a string) of the current model to use
+  Initially that comes from a entry in the json config file.
+  It can be changed by the Gui via a drop down list widget. 
+  The model name is used to get the corresponding model object and its 
+  attributes. If the model attributes don't exist, we'll have to default them
   """
   global chatbot, settings, applog
   chatbot = Chatbot(applog, settings.ollama_hosts, settings.ollama_port, speechio)
-  model = settings.ollama_models[settings.ollama_default_model]
-  # print('This tweak', model)
-  if model is not None:
-    # use the first responding chatbot
-    applog.info(f"Look for a chatbot from: {settings.ollama_hosts}")
-    for host in settings.ollama_hosts:
-      try:
-        chatbot.init_llm(host, model)
-        # we only get here if there was no exception
-        applog.info(f"Loaded {model} model from {host}")
-        return
-      finally:
-        pass
-    applog.warning("No chatbots found")
-  else:
-    applog.info('default llm model not found')
-    
+  if (mdl_name is not None):
+    settings.ollama_default_model = mdl_name
+  model = settings.ollama_models.get(settings.ollama_default_model, None)
+  if model is None:
+    # make up defaults
+    promptf = chatbot.default_prompt(mdl_name, settings.homie_device)
+    model = {"name": mdl_name, 'stream': True, "md_format": True, 
+             "delete_think_blocks": False,
+             "use_audible_tag": False,
+             "prompt": promptf}
+    settings.ollama_models[mdl_name] = model
+  # use the first responding chatbot
+  applog.info(f"Look for a chatbot from: {settings.ollama_hosts}")
+  for host in settings.ollama_hosts:
+    try:
+      chatbot.init_llm(host, model)
+      # we only get here if there was no exception
+      applog.info(f"Loaded {model} model from {host}")
+      return
+    except httpcore.ConnectError:
+      continue
+    finally:
+      pass
+  applog.warning("No chatbots found")
+  # Throw an exception
+  raise httpcore.ConnectError("Chatbots unreachable")
     
 '''
 STATES:     Idle ---> Listening --->  chat ---> Speaking --> followup
@@ -464,7 +488,7 @@ def run_machine(evtTuple=None):
       # msg is a string with the model name
       if machine_state == State.chatting:
         speech_stop()
-      if msg != settings.ollama_model:
+      if msg != settings.ollama_default_model:
         applog.info(f"switching to {msg} LLM")
         set_ollama_model(msg)
         new_state = State.listening
@@ -862,7 +886,7 @@ def main():
   gvars.settings = settings
   
   # create the ollama object and pull the model (settings.default)
-  set_ollama_model()
+  set_ollama_model(None)  # use default from settings file
   publish_model_names()
   
   wss_server_init(settings)
