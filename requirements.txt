@@ -5,7 +5,7 @@ zmq
 paho-mqtt
 websocket-client
 python-vlc
-websockets
+websockets ==13.1
 pulsectl
 SpeechRecognition
 sounddevice

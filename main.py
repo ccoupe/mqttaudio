@@ -8,6 +8,7 @@
 # It's a horrible mix of paho-mqtt, websockets and websocket-client
 #
 import paho.mqtt.client as mqtt
+import httpcore
 import sys
 import json
 import argparse
