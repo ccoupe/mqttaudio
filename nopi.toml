@@ -1,0 +1,42 @@
+[mqtt]
+  mqtt_server_ip = "bronco.local"
+  mqtt_port =  1883
+  mqtt_client_name = "pi5_bridge"
+  homie_device =  "pi5_bear"
+  bridge_ip = "pi5.local"
+  bridge_port = 8281
+
+[tts]
+  engine = "glados2"
+  glados = { tts_url = "http://bronco.local:8124/synthesize/" }
+  glados2 = { tts_url = "http://bronco.local:8132/v1/audio/speech" }
+  mycroft =  { tts_url = "http://nearpi.local:8124/synthesize/" }
+
+[microphone]
+  usbdongle = "alsa_input.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.mono-fallback"
+  microphone = "usbdongle"
+  microphone_volume = 0.73
+  microphone_pyaudio_name = "pulse"
+  mic_pub_type = "login"
+  mic_pub_topic = "homie/pi5_bear/screen/control/set"
+
+[speaker_section]
+  usbdongle = "alsa_output.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.analog-stereo"
+  bluetooth = "bluez_output.C2_08_9A_CB_33_0C.1"
+  hdmi =  "alsa_output.platform-107c701400.hdmi.hdmi-stereo"
+  #speaker = "hdmi"
+  speaker = "bluetooth"
+  speaker_volume = 0.69
+
+[stt]
+  stt_host = "bronco.local"
+  stt_port = 5003
+
+[ollama]
+  ollama_hosts = ["bigboy.local", "bronco.local"]
+  ollama_port = 11434
+  sys_prompt = "prompt.txt"
+  ollama_models =  {name = "deepseek-r1:14b",  stream = false, md_format = false, delete_think_blocks = true, prompt = "pi5-deepseek.prompt", use_audible_tag = true}
+  #ollama_models = { name = "stablelm-zephyr:latest", stream = true, md_format = true, delete_think_blocks = false, prompt = "pi5-zeph.prompt", use_audible_tag = false} 
+  ollama_model = "pi5-deepseek14b"
+  ollama_default_model = "pi5-deepseek14b"
