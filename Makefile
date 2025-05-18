@@ -15,8 +15,8 @@ SHELL := /bin/bash
 all: install
 
 PYTOPF := ${DESTDIR}/main.py ${DESTDIR}/gvars.py ${DESTDIR}/speechio.py
-PYLIBF := ${DESTDIR}/lib/Audio.py ${DESTDIR}/lib/Constants.py \
-	${DESTDIR}/lib/Chatbot.py ${DESTDIR}/lib/Settings.py
+PYLIBF := ${DESTDIR}/Audio.py ${DESTDIR}/Constants.py \
+	${DESTDIR}/Chatbot.py ${DESTDIR}/Settings.py
 MFILES := ${DESTDIR}/${NODE}.toml ${DESTDIR}/Makefile ${DESTDIR}/${SERVICE} \
 	${DESTDIR}/${LAUNCH}
 PROMPTS := ${DESTDIR}/prompts/pi5-deepseek.prompt
@@ -30,17 +30,17 @@ ${DESTDIR}/gvars.py : ${SRCDIR}/gvars.py
 ${DESTDIR}/speechio.py : ${SRCDIR}/speechio.py
 	cp ${SRCDIR}/speechio.py ${DESTDIR}/speechio.py
 	
-${DESTDIR}/lib/Audio.py : ${SRCDIR}/lib/Audio.py
-	cp ${SRCDIR}/lib/Audio.py ${DESTDIR}/lib/Audio.py
+${DESTDIR}/Audio.py : ${SRCDIR}/Audio.py
+	cp ${SRCDIR}/Audio.py ${DESTDIR}/Audio.py
 	
-${DESTDIR}/lib/Constants.py : ${SRCDIR}/lib/Constants.py
-	cp ${SRCDIR}/lib/Constants.py ${DESTDIR}/lib/Constants.py
+${DESTDIR}/Constants.py : ${SRCDIR}/Constants.py
+	cp ${SRCDIR}/Constants.py ${DESTDIR}/Constants.py
 	
-${DESTDIR}/lib/Chatbot.py : ${SRCDIR}/lib/Chatbot.py
-	cp ${SRCDIR}/lib/Chatbot.py ${DESTDIR}/lib/Chatbot.py
+${DESTDIR}/Chatbot.py : ${SRCDIR}/Chatbot.py
+	cp ${SRCDIR}/Chatbot.py ${DESTDIR}/Chatbot.py
 	
-${DESTDIR}/lib/Settings.py:  ${SRCDIR}/lib/Settings.py
-	cp ${SRCDIR}/lib/Settings.py ${DESTDIR}/lib/Settings.py
+${DESTDIR}/Settings.py:  ${SRCDIR}/Settings.py
+	cp ${SRCDIR}/Settings.py ${DESTDIR}/Settings.py
 	
 ${DESTDIR}/prompts/pi5-deepseek.prompt: ${SRCDIR}/prompts/pi5-deepseek.prompt
 	cp ${SRCDIR}/prompts/pi5-deepseek.prompt ${DESTDIR}/prompts
@@ -69,7 +69,6 @@ stop:
 	
 ${DESTDIR}: 
 	sudo mkdir -p ${DESTDIR}
-	sudo mkdir -p ${DESTDIR}/lib	
 	sudo mkdir -p ${DESTDIR}/chimes
 	sudo mkdir -p ${DESTDIR}/sirens
 	sudo mkdir -p ${DESTDIR}/prompts

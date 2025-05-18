@@ -9,7 +9,7 @@ import os
 import json
 import pyaudio
 import speech_recognition as speech_recog
-from lib.Constants import Event
+from Constants import Event
 # from lib.Settings import Settings
 import urllib.parse
 import re

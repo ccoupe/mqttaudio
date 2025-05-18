@@ -18,15 +18,15 @@ import threading
 from threading import Lock, Thread
 import socket
 import os
-from lib.Settings import Settings
-from lib.Audio import AudioDev
-from lib.Chatbot import Chatbot
+from Settings import Settings
+from Audio import AudioDev
+from Chatbot import Chatbot
 # Fix the alsa 'error' message by importing sounddevice. Don't know why.
 # import sounddevice
 import speechio
 from subprocess import Popen
 import urllib.request
-from lib.Constants import State, Event
+from Constants import State, Event
 import logging
 import logging.handlers
 import asyncio
