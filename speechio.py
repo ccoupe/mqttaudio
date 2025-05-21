@@ -65,14 +65,14 @@ def enqueTTS(msg):
     dt['voice'] = 'GlaDOS'
     gvars.tts_queue.put((dt, fopname))
   else:
-	  # create a temp file pathname for the msg and write msg to it.
-	  fi = tempfile.mkstemp(prefix='glados-', suffix='.txt', text=True)
-	  fipname = fi[1]
-	  fil = open(fipname, mode="w")
-	  fil.write(text)
-	  fil.close()	  
-	  gvars.tts_queue.put((fipname, fopname))
- 
+    # create a temp file pathname for the msg and write msg to it.
+    fi = tempfile.mkstemp(prefix='glados-', suffix='.txt', text=True)
+    fipname = fi[1]
+    fil = open(fipname, mode="w")
+    fil.write(text)
+    fil.close()
+    gvars.tts_queue.put((fipname, fopname))
+   
  
 # This is the thread that processes the tts_queue.
 #
@@ -82,13 +82,13 @@ def dequeTTS():
     ent = gvars.tts_queue.get()
     fpin = ent[0]
     fpon = ent[1]
-    if isinstance(fpin, dict): 
-      # version 2 settings.audio_api=='openai' > True. 
+    if isinstance(fpin, dict):
+      # version 2 settings.audio_api=='openai' > True.
       # fpin is not a file name string
       jstr = json.dumps(fpin)
       tts_cmd = (f'curl -H "Authorization: Bearer not-needed"'
-                f' -H "Content-Type: application/json" -d \'{jstr}\''
-                f' -o {fpon} ') + gvars.settings.tts_url
+                 f' -H "Content-Type: application/json" -d \'{jstr}\''
+                 f' -o {fpon} ') + gvars.settings.tts_url
       gvars.applog.info(f'tts queue: create {fpon} from {fpin}')
       gvars.applog.info(f'ttscmd: {tts_cmd}')
       tts_resp = os.system(tts_cmd)

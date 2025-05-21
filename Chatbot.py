@@ -47,9 +47,9 @@ class Chatbot:
     dt = self.client.list()
     # self.log.info(f'Have these models: {dt}')
     self.models = dt['models']
-    self.log.info(f'Have these models: {self.models }')
+    self.log.info(f'Have these models: {self.models}')
     for mdl in self.models:
-      if type(mdl) != dict:
+      if type(mdl) is not dict:
         # API change from dict to (class ?)
         self.log.info(f"new: {mdl.model} is type {type(mdl)}")
       else:
@@ -91,7 +91,7 @@ class Chatbot:
   def list_model_names(self):
     mdlnm = []
     for mdl in self.models:
-      if type(mdl) == dict:
+      if type(mdl) is dict:
         mdlnm.append(mdl['name'])
       else:
         mdlnm.append(mdl.model)
@@ -111,7 +111,6 @@ snarky, by default.\nYou are connected to a text to speech device so limit \
 your output to text you want the user to hear audibly.\nDo not output your \
 chain of thought or reasoning.")
     return promptf
-    
     
   # Use the streaming, non-rest Python API.
   def call_ollama(self, messages):

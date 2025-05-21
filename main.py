@@ -15,9 +15,9 @@ import argparse
 # from datetime import datetime
 import time
 import threading
-from threading import Lock, Thread
+from threading import Thread
 import socket
-import os
+# import os
 from Settings import Settings
 from Audio import AudioDev
 from Chatbot import Chatbot
@@ -293,7 +293,7 @@ def call_chatbot(msg):
         sys_prompt = f.read()
         chatbot.messages.append({"role": "system", "content": sys_prompt})
         applog.info(f"setting system prompt to '{sys_prompt}'")
-    except Exception as e:
+    except Exception:
       raise RuntimeError(f"Problem with {promptf} - does it exist?")
   
   chatbot.messages.append({"role": "user", "content": msg})
@@ -314,8 +314,8 @@ def set_ollama_model(mdl_name: str):
   
   self.ollama_default_model is the NAME (a string) of the current model to use
   Initially that comes from a entry in the json config file.
-  It can be changed by the Gui via a drop down list widget. 
-  The model name is used to get the corresponding model object and its 
+  It can be changed by the Gui via a drop down list widget.
+  The model name is used to get the corresponding model object and its
   attributes. If the model attributes don't exist, we'll have to default them
   """
   global chatbot, settings, applog
@@ -326,7 +326,7 @@ def set_ollama_model(mdl_name: str):
   if model is None:
     # make up defaults
     promptf = chatbot.default_prompt(mdl_name, settings.homie_device)
-    model = {"name": mdl_name, 'stream': True, "md_format": True, 
+    model = {"name": mdl_name, 'stream': True, "md_format": True,
              "delete_think_blocks": False,
              "use_audible_tag": False,
              "prompt": promptf}
@@ -346,7 +346,8 @@ def set_ollama_model(mdl_name: str):
   applog.warning("No chatbots found")
   # Throw an exception
   raise httpcore.ConnectError("Chatbots unreachable")
-    
+
+
 '''
 STATES:     Idle ---> Listening --->  chat ---> Speaking --> followup
 
@@ -691,8 +692,8 @@ def playUrl(url):
   else:
     try:
       urllib.request.urlretrieve(url, tmpf)
-    except:
-      applog.warn(f"Failed download of {url}")
+    except Exception as e:
+      applog.warn(f"Failed download of {url} {e}")
     # change the volume?
     if settings.player_vol != settings.player_vol_default and not audiodev.broken:
       applog.info(f'set player vol to {settings.player_vol}')

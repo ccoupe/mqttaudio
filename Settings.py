@@ -6,12 +6,13 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib
 
+
 class Settings:
 
   def __init__(self, etcf, log):
     self.etcfname = etcf
     self.log = log
-    self.hostname = socket.gethostname().split(".")[0] 
+    self.hostname = socket.gethostname().split(".")[0]
     if etcf.endswith('.toml'):
       self.load_toml(self.etcfname)
       self.log.info("Toml Settings from %s" % self.etcfname)
@@ -26,7 +27,7 @@ class Settings:
       with open(config_file, 'rb') as f:
         conf = tomllib.load(f)
         # print(conf)
-        # [mqtt] section 
+        # [mqtt] section
         try:
           mqtt = conf['mqtt']
           self.mqtt_server_ip = mqtt.get("mqtt_server_ip", "192.168.1.2")
@@ -42,7 +43,7 @@ class Settings:
         try:
           tts = conf['tts']
           self.engine_nm = tts.get("engine", None)
-          self.engine_name=tts[self.engine_nm]
+          self.engine_name = tts[self.engine_nm]
           self.tts_url = self.engine_name['tts_url']
           if self.engine_name == 'glados2':
             self.audio_api = 'openai'
@@ -97,8 +98,8 @@ class Settings:
         # [stt] section
         try:
           stt = conf.get('stt', None)
-          self.stt_host = conf.get('stt_host', 'bronco.local')
-          self.stt_port = conf.get('stt_port', 5003)
+          self.stt_host = stt.get('stt_host', 'bronco.local')
+          self.stt_port = stt.get('stt_port', 5003)
           # print(f'STT: {self.stt_host}:{self.stt_port}')
         except (RuntimeError, NameError):
           raise "Missing stt section?"
