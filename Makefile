@@ -7,55 +7,54 @@ DESTDIR ?= /usr/local/lib/${PRJ}
 SRCDIR ?= $(HOME)/Projects/iot/${PRJ}
 LAUNCH ?= ${PRJ}.sh
 SERVICE ?= $(PRJ).service
-PYENV ?= ${DESTDIR}/ma-env
+PYENV ?= ${DESTDIR}/.venv
 NODE := $(shell hostname)
 SHELL := /bin/bash 
+PYFILES = $(shell cd $(SRCDIR); ls *.py)
+PYVER ?= 3.11.2
 
-.PHONY: all update install clean realclean setup_dir stop start
+.PHONY: all update install clean distclean setup_dir stop start
 all: install
 
-PYTOPF := ${DESTDIR}/main.py ${DESTDIR}/gvars.py ${DESTDIR}/speechio.py
-PYLIBF := ${DESTDIR}/Audio.py ${DESTDIR}/Constants.py \
-	${DESTDIR}/Chatbot.py ${DESTDIR}/Settings.py
+# Define function; $(1) is the python file name.
+define copyheader =
+$(DESTDIR)/$(1): $(SRCDIR)/$(1)
+	cp $$^ $$@
+endef
+
+# Use function to create recipes for each python file.
+$(foreach file,$(PYFILES),$(eval $(call copyheader,$(file))))
+
+# Depend on all destination python files.
+pyfiles: $(addprefix $(DESTDIR)/,$(PYFILES))
+
 MFILES := ${DESTDIR}/${NODE}.toml ${DESTDIR}/Makefile ${DESTDIR}/${SERVICE} \
 	${DESTDIR}/${LAUNCH}
-PROMPTS := ${DESTDIR}/prompts/pi5-deepseek.prompt
 
-${DESTDIR}/main.py : ${SRCDIR}/main.py
-	cp ${SRCDIR}/main.py ${DESTDIR}/main.py
-	
-${DESTDIR}/gvars.py : ${SRCDIR}/gvars.py
-	cp ${SRCDIR}/gvars.py ${DESTDIR}/gvars.py
-	
-${DESTDIR}/speechio.py : ${SRCDIR}/speechio.py
-	cp ${SRCDIR}/speechio.py ${DESTDIR}/speechio.py
-	
-${DESTDIR}/Audio.py : ${SRCDIR}/Audio.py
-	cp ${SRCDIR}/Audio.py ${DESTDIR}/Audio.py
-	
-${DESTDIR}/Constants.py : ${SRCDIR}/Constants.py
-	cp ${SRCDIR}/Constants.py ${DESTDIR}/Constants.py
-	
-${DESTDIR}/Chatbot.py : ${SRCDIR}/Chatbot.py
-	cp ${SRCDIR}/Chatbot.py ${DESTDIR}/Chatbot.py
-	
-${DESTDIR}/Settings.py:  ${SRCDIR}/Settings.py
-	cp ${SRCDIR}/Settings.py ${DESTDIR}/Settings.py
-	
-${DESTDIR}/prompts/pi5-deepseek.prompt: ${SRCDIR}/prompts/pi5-deepseek.prompt
-	cp ${SRCDIR}/prompts/pi5-deepseek.prompt ${DESTDIR}/prompts
-	
-${DESTDIR}/${LAUNCH}: ${SRCDIR}/launch.sh
+$(DESTDIR)/$(NODE).toml:
+	cp $(SRCDIR)/$(NODE).toml $(DESTDIR)
+
+$(DESTDIR)/$(SERVICE):
+	cp $(SRCDIR)/$(SERVICE) $(DESTDIR)
+
+$(DESTDIR)/Makefile:
+	cp $(SRCDIR)/Makefile $(DESTDIR)
+
+$(DESTDIR)/$(LAUNCH): $(SRCDIR)/launch.sh
 	sed  s!PYENV!${PYENV}! <${SRCDIR}/launch.sh >$(DESTDIR)/$(LAUNCH)
+
+${DESTDIR}/prompts/$(NODE)-deepseek.prompt: 
+	mkdir -p $(DESTDIR)/prompts
+	cp deepseek.prompt $(DESTDIR)/prompts/$(NODE)-deepseek.prompt
 
 ${PYENV}: ${SRCDIR}/requirements.txt
 	sudo mkdir -p ${PYENV}
 	sudo chown ${USER} ${PYENV}
-	python3 -m venv ${PYENV}
+	uv venv --python ${PYVER} --no-project ${PYENV}
 	( \
 	set -e ;\
-	source ${PYENV}/bin/activate; \
-	pip install -r $(SRCDIR)/requirements.txt; \
+	source ${PYENV}/bin/activate ; \
+	uv pip install -r $(SRCDIR)/requirements.txt ; \
 	)
 
 start:
@@ -76,13 +75,13 @@ ${DESTDIR}:
 	sudo cp ${SRCDIR}/${NODE}.toml ${DESTDIR}
 	sudo cp ${SRCDIR}/requirements.txt ${DESTDIR}
 	sudo cp ${SRCDIR}/${SERVICE} ${DESTDIR}
-	sudo cp ${SRCDIR}/prompts/* ${DESTDIR}/prompts
+	sudo cp ${SRCDIR}/deepseek.prompt ${DESTDIR}/prompts
 	sudo chown -R ${USER} ${DESTDIR}
 	sed  s!PYENV!${PYENV}! <${SRCDIR}/launch.sh >$(DESTDIR)/$(LAUNCH)
 	sudo chmod +x ${DESTDIR}/${LAUNCH}
 	sudo cp ${DESTDIR}/${SERVICE} /etc/xdg/systemd/user
 		
-update: ${PYTOPF} ${PYLIBF} ${MFILES} ${PROMPTS}
+update: pyfiles ${MFILES} ${DESTDIR}/prompts/${NODE}-deepseek.prompt
 	sudo chown -R ${USER} ${DESTDIR}
 
 
@@ -98,6 +97,6 @@ clean:
 	sudo rm -f /etc/xdg/systemd/user/${SERVICE}
 	sudo rm -rf ${DESTDIR}
 
-realclean: clean
+distclean: clean
 	rm -rf ${PYENV}
 
