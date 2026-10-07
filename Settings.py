@@ -59,7 +59,7 @@ class Settings:
           micselect = mic['microphone']
           self.microphone = mic[micselect]
           self.microphone_volume = mic.get('microphone_volume', 0.60)
-          self.microphone_pyaudio = mic.get("microphone_pyaudio _name", "pulse")
+          self.microphone_pyaudio = mic.get("microphone_pyaudio_name", "pulse")
           self.microphone_index = None
           self.mic_pub_type = mic.get('mic_pub_type', 'notify')  # or 'login'
           self.mic_pub_topic = mic.get('mic_pub_topic',

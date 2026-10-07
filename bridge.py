@@ -21,7 +21,7 @@ import socket
 from Settings import Settings
 from Audio import AudioDev
 from Chatbot import Chatbot
-# Fix the alsa 'error' message by importing sounddevice. Don't know why.
+# Fix the alsa 'error' messagesq by importing sounddevice. Don't know why.
 # import sounddevice
 import speechio
 from subprocess import Popen
@@ -601,6 +601,8 @@ class PipeWireException(Exception):
 # Better to parse wpctl status output eh?
 def pipewire_setup(settings):
   pulse = pulsectl.Pulse('mqttmycroft')
+  settings.microphone_index = None
+  settings.speaker_index = None
   for src in pulse.source_list():
     print('PWire Setup Source:', src)
     if src.name == settings.microphone:
@@ -609,7 +611,7 @@ def pipewire_setup(settings):
       pulse.default_set(src)
       applog.info(f'Microphone index = {settings.microphone_index}')
   for sink in pulse.sink_list():
-    # applog.info(f'{sink.name} =? {settings.speaker}')
+    applog.info(f'{sink.name} =? {settings.speaker}')
     print('PWire Setup Sink:', sink)
     if sink.name == settings.speaker:
       settings.speaker_index = sink.index
@@ -878,6 +880,9 @@ def main():
       applog.info(f'Found {settings.microphone_pyaudio}')
       settings.alsa_mic = i
   applog.info(f"Mic index: {settings.alsa_mic} for {settings.microphone_pyaudio}")
+  if settings.alsa_mic < 0:
+      print("Flush\nFlush\n",flush=True)
+      time.sleep(2)
   gvars.microphone = speech_recog.Microphone(device_index=settings.alsa_mic)
 
   # TODO Eventually, I'll regret this setup for global variables.

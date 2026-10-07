@@ -16,16 +16,18 @@
   usbdongle = "alsa_input.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.mono-fallback"
   microphone = "usbdongle"
   microphone_volume = 0.73
-  microphone_pyaudio_name = "pulse"
+  #microphone_pyaudio_name = "pulse"
+  microphone_pyaudio_name = "pipewire"
   mic_pub_type = "login"
   mic_pub_topic = "homie/pi5_bear/screen/control/set"
 
 [speaker_section]
   usbdongle = "alsa_output.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.analog-stereo"
   bluetooth = "bluez_output.C2_08_9A_CB_33_0C.1"
-  hdmi =  "alsa_output.platform-107c701400.hdmi.hdmi-stereo"
-  #speaker = "hdmi"
-  speaker = "bluetooth"
+  hdmi = "alsa_output.platform-107c701400.hdmi.hdmi-stereo"
+  speaker = "hdmi"
+  #speaker = "bluetooth"
+  #speaker = "usbdongle"
   speaker_volume = 0.69
 
 [stt]

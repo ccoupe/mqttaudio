@@ -11,7 +11,7 @@ PYENV ?= ${DESTDIR}/.venv
 NODE := $(shell hostname)
 SHELL := /bin/bash 
 PYFILES = $(shell cd $(SRCDIR); ls *.py)
-PYVER ?= 3.11.2
+PYVER ?= 3.11.12
 
 .PHONY: all update install clean distclean setup_dir stop start
 all: install
@@ -19,7 +19,7 @@ all: install
 # Define function; $(1) is the python file name.
 define copyheader =
 $(DESTDIR)/$(1): $(SRCDIR)/$(1)
-	cp $$^ $$@
+	cp -u $$^ $$@
 endef
 
 # Use function to create recipes for each python file.
@@ -31,26 +31,26 @@ pyfiles: $(addprefix $(DESTDIR)/,$(PYFILES))
 MFILES := ${DESTDIR}/${NODE}.toml ${DESTDIR}/Makefile ${DESTDIR}/${SERVICE} \
 	${DESTDIR}/${LAUNCH}
 
-$(DESTDIR)/$(NODE).toml:
-	cp $(SRCDIR)/$(NODE).toml $(DESTDIR)
+$(DESTDIR)/$(NODE).toml: $(SRCDIR)/$(NODE).toml
+	cp -u $(SRCDIR)/$(NODE).toml $(DESTDIR)
 
 $(DESTDIR)/$(SERVICE):
-	cp $(SRCDIR)/$(SERVICE) $(DESTDIR)
+	cp -u $(SRCDIR)/$(SERVICE) $(DESTDIR)
 
 $(DESTDIR)/Makefile:
-	cp $(SRCDIR)/Makefile $(DESTDIR)
+	cp -u $(SRCDIR)/Makefile $(DESTDIR)
 
 $(DESTDIR)/$(LAUNCH): $(SRCDIR)/launch.sh
 	sed  s!PYENV!${PYENV}! <${SRCDIR}/launch.sh >$(DESTDIR)/$(LAUNCH)
 
 ${DESTDIR}/prompts/$(NODE)-deepseek.prompt: 
 	mkdir -p $(DESTDIR)/prompts
-	cp deepseek.prompt $(DESTDIR)/prompts/$(NODE)-deepseek.prompt
+	cp -u deepseek.prompt $(DESTDIR)/prompts/$(NODE)-deepseek.prompt
 
 ${PYENV}: ${SRCDIR}/requirements.txt
 	sudo mkdir -p ${PYENV}
 	sudo chown ${USER} ${PYENV}
-	uv venv --python ${PYVER} --no-project ${PYENV}
+	uv venv --no-project ${PYENV}
 	( \
 	set -e ;\
 	source ${PYENV}/bin/activate ; \
@@ -99,4 +99,3 @@ clean:
 
 distclean: clean
 	rm -rf ${PYENV}
-
